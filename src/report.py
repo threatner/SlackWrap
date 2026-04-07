@@ -47,8 +47,9 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
     lines.append(f"Channel: {channel_label}")
 
     huddles = stats["huddles"]
-    first_date = datetime.fromtimestamp(huddles[-1]["room"]["date_start"], tz=timezone.utc).astimezone()
-    last_date = datetime.fromtimestamp(huddles[0]["room"]["date_start"], tz=timezone.utc).astimezone()
+    all_timestamps = [h["room"]["date_start"] for h in huddles]
+    first_date = datetime.fromtimestamp(min(all_timestamps), tz=timezone.utc).astimezone()
+    last_date = datetime.fromtimestamp(max(all_timestamps), tz=timezone.utc).astimezone()
     lines.append(f"Period:  {first_date.strftime('%Y-%m-%d')} -> {last_date.strftime('%Y-%m-%d')}")
     lines.append(f"Total huddles: {stats['total_huddles']}")
     lines.append("")
