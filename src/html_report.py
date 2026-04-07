@@ -145,6 +145,22 @@ def generate_html_report(
             emoji_html += f'<div class="emoji-row">{top_str}</div>'
         cards.append(_card("Emojis in Messages", emoji_html))
 
+    # Thread Activity
+    if has_messages and m_stats.get("top_level_messages") is not None:
+        top_lvl = m_stats.get("top_level_messages", 0)
+        thr_msgs = m_stats.get("thread_messages", 0)
+        thr_pct = m_stats.get("thread_pct", 0.0)
+        top_pct = round(top_lvl / m_stats["total_messages"] * 100) if m_stats["total_messages"] else 0
+        you_started = m_stats.get("threads_started_by_you", 0)
+        them_started = m_stats.get("threads_started_by_them", 0)
+        thread_html = f"""
+            <div class="stat-row"><span class="label">Top-level</span><span class="value">{top_lvl:,} <small>({top_pct}%)</small></span></div>
+            <div class="stat-row"><span class="label">In threads</span><span class="value">{thr_msgs:,} <small>({round(thr_pct)}%)</small></span></div>
+        """
+        if you_started > 0 or them_started > 0:
+            thread_html += f'<div class="stat-row"><span class="label">Threads started</span><span class="value">{your_name}: {you_started} &middot; {their_name}: {them_started}</span></div>'
+        cards.append(_card("Thread Activity", thread_html))
+
     # Trends
     if has_messages and m_stats.get("trend_last_30d_count") is not None:
         pct_30d = m_stats.get("trend_30d_pct_change")

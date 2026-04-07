@@ -87,6 +87,24 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         lines.append(f"  {current_month_display + ':':<16} {m_stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {yoy_display})")
         lines.append("")
 
+    # --- Thread Activity ---
+    if has_messages and m_stats.get("top_level_messages") is not None:
+        top_lvl = m_stats.get("top_level_messages", 0)
+        thr_msgs = m_stats.get("thread_messages", 0)
+        thr_pct = m_stats.get("thread_pct", 0.0)
+        you_started = m_stats.get("threads_started_by_you", 0)
+        them_started = m_stats.get("threads_started_by_them", 0)
+        if top_lvl > 0 or thr_msgs > 0:
+            top_pct = round(top_lvl / m_stats["total_messages"] * 100) if m_stats["total_messages"] else 0
+            lines.append("Thread Activity")
+            lines.append("-" * 55)
+            lines.append(f"  Total messages:   {m_stats['total_messages']:,}")
+            lines.append(f"  Top-level:        {top_lvl:,} ({top_pct}%)")
+            lines.append(f"  In threads:       {thr_msgs:,} ({round(thr_pct)}%)")
+            if you_started > 0 or them_started > 0:
+                lines.append(f"  Threads started:  {your_name}: {you_started} / {their_name}: {them_started}")
+            lines.append("")
+
     # --- Who Initiates (combined) ---
     lines.append("Who Initiates")
     lines.append("-" * 55)
@@ -190,6 +208,9 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
     if has_messages and m_stats["span_days"] > 0:
         m_weeks = max(m_stats["span_days"] / 7, 1)
         lines.append(f"  Messages/week:    {m_stats['total_messages'] / m_weeks:.1f}")
+    if has_huddles and has_messages and h_stats["total_huddles"] > 0:
+        ratio = m_stats["total_messages"] / h_stats["total_huddles"]
+        lines.append(f"  Per huddle:       ~{ratio:.0f} messages exchanged")
     lines.append("")
 
     # --- By Day of Week (combined table) ---

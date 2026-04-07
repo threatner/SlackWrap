@@ -122,6 +122,11 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "trend_yoy_month": "",
             "trend_yoy_count": None,
             "trend_yoy_pct_change": None,
+            "top_level_messages": 0,
+            "thread_messages": 0,
+            "thread_pct": 0.0,
+            "threads_started_by_you": 0,
+            "threads_started_by_them": 0,
         }
 
     you_msgs = [m for m in user_msgs if m["user"] == user_id]
@@ -317,6 +322,14 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     your_top_text_emojis = your_text_emoji_counter.most_common(5)
     their_top_text_emojis = their_text_emoji_counter.most_common(5)
 
+    # --- Thread Breakdown ---
+    top_level = [m for m in user_msgs if not m.get("thread_ts") or m.get("thread_ts") == m.get("ts")]
+    thread_replies = [m for m in user_msgs if m.get("thread_ts") and m.get("thread_ts") != m.get("ts")]
+    thread_pct = round(len(thread_replies) / total * 100, 1) if total else 0.0
+
+    thread_parents_you = sum(1 for m in user_msgs if m.get("reply_count", 0) > 0 and m["user"] == user_id)
+    thread_parents_them = sum(1 for m in user_msgs if m.get("reply_count", 0) > 0 and m["user"] != user_id)
+
     # --- Trend Analysis ---
     now = date.today()
     last_30d = [m for m in sorted_msgs if (now - datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()).days < 30]
@@ -377,6 +390,11 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "trend_yoy_month": yoy_month,
         "trend_yoy_count": trend_yoy_count,
         "trend_yoy_pct_change": trend_yoy_pct,
+        "top_level_messages": len(top_level),
+        "thread_messages": len(thread_replies),
+        "thread_pct": thread_pct,
+        "threads_started_by_you": thread_parents_you,
+        "threads_started_by_them": thread_parents_them,
     }
 
 
@@ -428,6 +446,21 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
         except ValueError:
             current_month_display = current_month_label
         lines.append(f"  {current_month_display + ':':<16} {stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {datetime.strptime(stats['trend_yoy_month'], '%Y-%m').strftime('%b %Y') if stats.get('trend_yoy_month') else 'prior year'})")
+
+    # Thread Activity
+    if stats.get("top_level_messages") is not None or stats.get("thread_messages"):
+        lines.append("")
+        lines.append("Thread Activity")
+        lines.append("-" * 50)
+        lines.append(f"  Total messages:   {stats['total_messages']:,}")
+        top_pct = round((stats['top_level_messages'] / stats['total_messages'] * 100)) if stats['total_messages'] else 0
+        thr_pct = round(stats.get('thread_pct', 0))
+        lines.append(f"  Top-level:        {stats['top_level_messages']:,} ({top_pct}%)")
+        lines.append(f"  In threads:       {stats['thread_messages']:,} ({thr_pct}%)")
+        you_started = stats.get("threads_started_by_you", 0)
+        them_started = stats.get("threads_started_by_them", 0)
+        if you_started > 0 or them_started > 0:
+            lines.append(f"  Threads started:  {your_name}: {you_started} / {their_name}: {them_started}")
 
     # Who initiates
     total_init = stats["you_initiated"] + stats["them_initiated"]

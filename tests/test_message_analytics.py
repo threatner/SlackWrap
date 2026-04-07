@@ -163,6 +163,21 @@ class TestTrendAnalysis:
         assert stats["trend_30d_pct_change"] == 100.0
 
 
+class TestThreadBreakdown:
+    def test_thread_breakdown(self):
+        msgs = [
+            {"user": "U_ME", "ts": "1.0", "text": "top level", "subtype": None},
+            {"user": "U_ME", "ts": "2.0", "text": "thread parent", "subtype": None, "thread_ts": "2.0", "reply_count": 1},
+            {"user": "U001", "ts": "2.5", "text": "reply", "subtype": None, "thread_ts": "2.0"},
+            {"user": "U001", "ts": "3.0", "text": "another top", "subtype": None},
+        ]
+        stats = compute_message_stats(msgs, "U_ME")
+        assert stats["top_level_messages"] == 3  # 1.0, 2.0, 3.0
+        assert stats["thread_messages"] == 1  # 2.5
+        assert stats["threads_started_by_you"] == 1
+        assert stats["threads_started_by_them"] == 0
+
+
 class TestFormatMessageReport:
     def test_formats_report(self):
         stats = compute_message_stats(SAMPLE_MESSAGES, "U_ME")
