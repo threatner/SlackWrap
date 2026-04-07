@@ -202,16 +202,9 @@ def main(argv: list[str] | None = None):
         if include == "y":
             extra_channels = select_shared_channels(client, target_user_id, target_name)
 
-    # Analytics type selection
     label = selected["label"]
-    print(f"\nWhat would you like to analyze for {label}?")
-    print("  1. Huddle Time")
-    print("  2. Message Analytics")
-    print("  3. Both")
-    print()
-    analytics_choice = input("Select [1-3]: ").strip()
 
-    # Fetch data from DM
+    # Fetch data
     use_cache = not args.no_cache
     print(f"\nFetching data...")
     all_messages = fetch_with_cache(client, cache, selected["channel_id"], use_cache, label="DM")
@@ -231,24 +224,13 @@ def main(argv: list[str] | None = None):
     their_name = target_name if is_dm else "Them"
     filter_target = target_user_id if extra_channels else None
 
-    # Compute stats based on choice
-    h_stats = None
-    m_stats = None
-
-    if analytics_choice in ("1", "3"):
-        huddles = extract_huddles(all_messages)
-        h_stats = compute_stats(huddles, user_id, filter_target)
-
-    if analytics_choice in ("2", "3"):
-        m_stats = compute_message_stats(all_messages, user_id, filter_target)
+    # Compute both huddle and message stats
+    huddles = extract_huddles(all_messages)
+    h_stats = compute_stats(huddles, user_id, filter_target)
+    m_stats = compute_message_stats(all_messages, user_id, filter_target)
 
     # Console output
-    if analytics_choice == "2":
-        print(format_message_report(m_stats, sources_label, your_name, their_name))
-    elif analytics_choice == "3":
-        print(format_combined_report(h_stats, m_stats, sources_label, your_name, their_name))
-    else:
-        print(format_report(h_stats, sources_label, your_name, their_name))
+    print(format_combined_report(h_stats, m_stats, sources_label, your_name, their_name))
 
     # HTML report
     html_path = generate_html_report(h_stats, m_stats, sources_label, your_name, their_name)
