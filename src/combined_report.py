@@ -122,20 +122,35 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         lines.append(f"                    \"{lm['text']}\"")
         lines.append("")
 
-    # --- Reactions ---
+    # --- Emojis in Messages ---
+    has_text_emoji = has_messages and (
+        m_stats.get("your_text_emoji_total", 0) > 0 or m_stats.get("their_text_emoji_total", 0) > 0
+    )
+    if has_text_emoji:
+        lines.append("Emojis Used in Messages")
+        lines.append("-" * 55)
+        lines.append(f"  {your_name + ':':<16} {m_stats['your_text_emoji_total']:,} emojis")
+        if m_stats.get("your_top_text_emojis"):
+            top_str = ", ".join(f":{name}: ({count})" for name, count in m_stats["your_top_text_emojis"])
+            lines.append(f"    Top:            {top_str}")
+        lines.append(f"  {their_name + ':':<16} {m_stats['their_text_emoji_total']:,} emojis")
+        if m_stats.get("their_top_text_emojis"):
+            top_str = ", ".join(f":{name}: ({count})" for name, count in m_stats["their_top_text_emojis"])
+            lines.append(f"    Top:            {top_str}")
+        lines.append("")
+
+    # --- Reactions on Messages ---
     has_reactions = has_messages and (
-        m_stats.get("your_reactions_given", 0) > 0
-        or m_stats.get("their_reactions_given", 0) > 0
-        or m_stats.get("top_reactions")
+        m_stats.get("your_reactions_given", 0) > 0 or m_stats.get("their_reactions_given", 0) > 0
     )
     if has_reactions:
-        lines.append("Reactions")
+        lines.append("Reactions on Messages")
         lines.append("-" * 55)
-        lines.append(f"  {your_name + ':':<16} {m_stats['your_reactions_given']:,} reactions given")
-        lines.append(f"  {their_name + ':':<16} {m_stats['their_reactions_given']:,} reactions given")
+        lines.append(f"  {your_name + ':':<16} {m_stats['your_reactions_given']:,} given")
+        lines.append(f"  {their_name + ':':<16} {m_stats['their_reactions_given']:,} given")
         if m_stats.get("top_reactions"):
-            top_str = ", ".join(f"{name} ({count})" for name, count in m_stats["top_reactions"])
-            lines.append(f"  Top reactions:    {top_str}")
+            top_str = ", ".join(f":{name}: ({count})" for name, count in m_stats["top_reactions"])
+            lines.append(f"  Top:              {top_str}")
         lines.append("")
 
     # --- Frequency (combined) ---

@@ -22,6 +22,14 @@ _INLINE_CODE_RE = re.compile(r"`[^`]+`")  # inline code
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+(?:\|[^>]*)?>")  # <@U12345> or <@U12345|name>
 _LINK_RE = re.compile(r"<https?://[^>]+>")  # <https://...|label>
 _EMOJI_RE = re.compile(r":[a-zA-Z0-9_+-]+:")  # :thumbsup:
+_EMOJI_EXTRACT_RE = re.compile(r":([a-zA-Z0-9_+-]+):")  # capture emoji names from text
+
+
+def _extract_text_emojis(text: str) -> list[str]:
+    # Strip code blocks first so we don't count emoji in code
+    text = _CODE_BLOCK_RE.sub("", text)
+    text = _INLINE_CODE_RE.sub("", text)
+    return _EMOJI_EXTRACT_RE.findall(text)
 
 
 def _clean_text_for_word_count(text: str) -> str:
@@ -104,6 +112,8 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "first_message": None, "last_message": None,
             "your_reactions_given": 0, "their_reactions_given": 0,
             "top_reactions": [], "your_top_reactions": [], "their_top_reactions": [],
+            "your_text_emoji_total": 0, "their_text_emoji_total": 0,
+            "your_top_text_emojis": [], "their_top_text_emojis": [],
         }
 
     you_msgs = [m for m in user_msgs if m["user"] == user_id]
@@ -284,6 +294,21 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     your_top_reactions = your_reaction_counter.most_common(3)
     their_top_reactions = their_reaction_counter.most_common(3)
 
+    # --- Emojis Used in Messages (text) ---
+    your_text_emoji_counter: Counter[str] = Counter()
+    their_text_emoji_counter: Counter[str] = Counter()
+    for m in user_msgs:
+        emojis = _extract_text_emojis(m.get("text", ""))
+        if m["user"] == user_id:
+            your_text_emoji_counter.update(emojis)
+        else:
+            their_text_emoji_counter.update(emojis)
+
+    your_text_emoji_total = sum(your_text_emoji_counter.values())
+    their_text_emoji_total = sum(their_text_emoji_counter.values())
+    your_top_text_emojis = your_text_emoji_counter.most_common(5)
+    their_top_text_emojis = their_text_emoji_counter.most_common(5)
+
     return {
         "total_messages": total,
         "you_count": len(you_msgs),
@@ -318,6 +343,10 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "top_reactions": top_reactions,
         "your_top_reactions": your_top_reactions,
         "their_top_reactions": their_top_reactions,
+        "your_text_emoji_total": your_text_emoji_total,
+        "their_text_emoji_total": their_text_emoji_total,
+        "your_top_text_emojis": your_top_text_emojis,
+        "their_top_text_emojis": their_top_text_emojis,
     }
 
 
@@ -408,21 +437,35 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
         lines.append(f"  Last message:     {lm_dt.strftime('%Y-%m-%d')} by {lm_name}")
         lines.append(f"                    \"{lm['text']}\"")
 
-    # Reactions
+    # Emojis in Messages
+    has_text_emoji = stats.get("your_text_emoji_total", 0) > 0 or stats.get("their_text_emoji_total", 0) > 0
+    if has_text_emoji:
+        lines.append("")
+        lines.append("Emojis Used in Messages")
+        lines.append("-" * 50)
+        lines.append(f"  {your_name + ':':<16} {stats['your_text_emoji_total']:,} emojis")
+        if stats.get("your_top_text_emojis"):
+            top_str = ", ".join(f":{name}: ({count})" for name, count in stats["your_top_text_emojis"])
+            lines.append(f"    Top:            {top_str}")
+        lines.append(f"  {their_name + ':':<16} {stats['their_text_emoji_total']:,} emojis")
+        if stats.get("their_top_text_emojis"):
+            top_str = ", ".join(f":{name}: ({count})" for name, count in stats["their_top_text_emojis"])
+            lines.append(f"    Top:            {top_str}")
+
+    # Reactions (smaller section)
     has_reactions = (
         stats.get("your_reactions_given", 0) > 0
         or stats.get("their_reactions_given", 0) > 0
-        or stats.get("top_reactions")
     )
     if has_reactions:
         lines.append("")
-        lines.append("Reactions")
+        lines.append("Reactions on Messages")
         lines.append("-" * 50)
-        lines.append(f"  {your_name + ':':<16} {stats['your_reactions_given']:,} reactions given")
-        lines.append(f"  {their_name + ':':<16} {stats['their_reactions_given']:,} reactions given")
+        lines.append(f"  {your_name + ':':<16} {stats['your_reactions_given']:,} given")
+        lines.append(f"  {their_name + ':':<16} {stats['their_reactions_given']:,} given")
         if stats.get("top_reactions"):
-            top_str = ", ".join(f"{name} ({count})" for name, count in stats["top_reactions"])
-            lines.append(f"  Top reactions:    {top_str}")
+            top_str = ", ".join(f":{name}: ({count})" for name, count in stats["top_reactions"])
+            lines.append(f"  Top:              {top_str}")
 
     # Hourly breakdown - top 5 hours
     hourly = stats.get("hourly_breakdown", {})

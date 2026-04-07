@@ -124,16 +124,33 @@ def generate_html_report(
             <div class="quote">&ldquo;{_escape(lm['text'])}&rdquo;</div>
         """))
 
-    # Reactions
+    # Emojis in Messages
+    has_text_emoji = has_messages and (m_stats.get("your_text_emoji_total", 0) > 0 or m_stats.get("their_text_emoji_total", 0) > 0)
+    if has_text_emoji:
+        emoji_html = f"""
+            <div class="stat-row"><span class="label">{your_name}</span><span class="value">{m_stats['your_text_emoji_total']:,} emojis</span></div>
+        """
+        if m_stats.get("your_top_text_emojis"):
+            top_str = " &nbsp; ".join(f":{name}: <small>({count})</small>" for name, count in m_stats["your_top_text_emojis"])
+            emoji_html += f'<div class="stat-row"><span class="label"></span><span class="value" style="font-size:12px;color:#8b949e">{top_str}</span></div>'
+        emoji_html += f"""
+            <div class="stat-row"><span class="label">{their_name}</span><span class="value">{m_stats['their_text_emoji_total']:,} emojis</span></div>
+        """
+        if m_stats.get("their_top_text_emojis"):
+            top_str = " &nbsp; ".join(f":{name}: <small>({count})</small>" for name, count in m_stats["their_top_text_emojis"])
+            emoji_html += f'<div class="stat-row"><span class="label"></span><span class="value" style="font-size:12px;color:#8b949e">{top_str}</span></div>'
+        cards.append(_card("Emojis in Messages", emoji_html))
+
+    # Reactions on Messages
     if has_messages and (m_stats.get("your_reactions_given", 0) > 0 or m_stats.get("their_reactions_given", 0) > 0):
         react_html = f"""
-            <div class="stat-row"><span class="label">{your_name}</span><span class="value">{m_stats['your_reactions_given']:,} reactions given</span></div>
-            <div class="stat-row"><span class="label">{their_name}</span><span class="value">{m_stats['their_reactions_given']:,} reactions given</span></div>
+            <div class="stat-row"><span class="label">{your_name}</span><span class="value">{m_stats['your_reactions_given']:,} given</span></div>
+            <div class="stat-row"><span class="label">{their_name}</span><span class="value">{m_stats['their_reactions_given']:,} given</span></div>
         """
         if m_stats.get("top_reactions"):
             top_str = " &nbsp; ".join(f":{name}: <small>({count})</small>" for name, count in m_stats["top_reactions"])
             react_html += f'<div class="stat-row" style="margin-top:8px"><span class="label">Top</span><span class="value">{top_str}</span></div>'
-        cards.append(_card("Reactions", react_html))
+        cards.append(_card("Reactions on Messages", react_html))
 
     cards_html = "\n".join(cards)
 
