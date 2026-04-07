@@ -97,3 +97,13 @@ class SlackClient:
                 break
             time.sleep(RATE_LIMIT_DELAY)
         return huddles
+
+    def resolve_user_name(self, user_id: str) -> str:
+        if user_id == self.user_id:
+            return "You"
+        if user_id in self._user_cache:
+            return self._user_cache[user_id]
+        data = self._get("users.info", {"user": user_id})
+        name = data.get("user", {}).get("real_name", user_id)
+        self._user_cache[user_id] = name
+        return name

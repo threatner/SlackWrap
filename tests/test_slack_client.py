@@ -180,3 +180,34 @@ class TestFetchHuddles:
                 huddles = client.fetch_huddles("C12345")
 
         assert len(huddles) == 2
+
+
+class TestResolveUserName:
+    def test_returns_display_name(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        user_response = {
+            "ok": True,
+            "user": {"id": "U001", "real_name": "John Smith"},
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(user_response)):
+            name = client.resolve_user_name("U001")
+
+        assert name == "John Smith"
+
+    def test_caches_results(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        user_response = {
+            "ok": True,
+            "user": {"id": "U001", "real_name": "John Smith"},
+        }
+        mock_get = MagicMock(return_value=_mock_response(user_response))
+        with patch("src.slack_client.requests.get", mock_get):
+            client.resolve_user_name("U001")
+            client.resolve_user_name("U001")
+
+        assert mock_get.call_count == 1
+
+    def test_returns_you_for_own_user_id(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        name = client.resolve_user_name("U_ME")
+        assert name == "You"
