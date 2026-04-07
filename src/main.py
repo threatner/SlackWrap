@@ -119,24 +119,22 @@ def main(argv: list[str] | None = None):
     args = parse_args(argv)
     load_dotenv()
     token = os.getenv("SLACK_USER_TOKEN")
-    user_id = os.getenv("SLACK_USER_ID")
 
-    if not token or not user_id:
+    if not token:
         print("Missing configuration. Create a .env file with:")
         print("  SLACK_USER_TOKEN=xoxp-your-token-here")
-        print("  SLACK_USER_ID=U_YOUR_USER_ID")
         print()
-        print("To get these values:")
+        print("To get the token:")
         print("  1. Go to https://api.slack.com/apps and create a new app")
         print("  2. Under OAuth & Permissions, add these User Token Scopes:")
         print("     channels:history, groups:history, im:history,")
         print("     users:read, channels:read, groups:read, im:read")
         print("  3. Install the app to your workspace")
         print("  4. Copy the User OAuth Token (starts with xoxp-)")
-        print("  5. Find your User ID in Slack (Profile > ... > Copy member ID)")
         sys.exit(1)
 
-    client = SlackClient(token=token, user_id=user_id)
+    client = SlackClient(token=token)
+    user_id = client.user_id
     cache = CacheManager()
 
     if args.clear_cache:

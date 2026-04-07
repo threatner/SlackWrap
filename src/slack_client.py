@@ -19,6 +19,7 @@ ENDPOINT_TIERS = {
     "conversations.list": 2,
     "conversations.history": 3,
     "conversations.members": 4,
+    "auth.test": 4,
 }
 
 
@@ -67,14 +68,18 @@ def _clear_status():
 
 
 class SlackClient:
-    def __init__(self, token: str, user_id: str):
+    def __init__(self, token: str, user_id: str | None = None):
         self.token = token
-        self.user_id = user_id
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
         self._own_first_name: str | None = None
-        # Per-endpoint request timestamp tracking
         self._endpoint_timestamps: dict[str, list[float]] = {}
+        # Auto-detect user_id from token if not provided
+        if user_id:
+            self.user_id = user_id
+        else:
+            data = self._get("auth.test")
+            self.user_id = data["user_id"]
 
     def _get_endpoint_count(self, endpoint: str) -> int:
         now = time.time()
