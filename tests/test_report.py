@@ -92,7 +92,7 @@ class TestFormatReport:
         assert "Per week:" in output
         assert "Per month:" in output
         assert "Who Starts Huddles" in output
-        assert "You:" in output
+        assert "You" in output
         assert "Them:" in output
         assert "hours" in output.lower()
         assert "By Day of Week" in output

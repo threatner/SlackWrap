@@ -4,7 +4,7 @@ from src.report import format_duration
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
-def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str) -> str:
+def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, your_name: str = "You") -> str:
     has_huddles = h_stats["total_huddles"] > 0
     has_messages = m_stats["total_messages"] > 0
 
@@ -51,8 +51,8 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str) -> 
         lines.append("Messages")
         lines.append("-" * 55)
         lines.append(f"  Total messages:   {m_stats['total_messages']:,}")
-        lines.append(f"  You:              {m_stats['you_count']:,} ({m_stats['you_pct']:.0f}%)")
-        lines.append(f"  Them:             {m_stats['them_count']:,} ({m_stats['them_pct']:.0f}%)")
+        lines.append(f"  {your_name + ':':<16} {m_stats['you_count']:,} ({m_stats['you_pct']:.0f}%)")
+        lines.append(f"  {'Them:':<16} {m_stats['them_count']:,} ({m_stats['them_pct']:.0f}%)")
         if m_stats["span_days"] > 0:
             per_week = m_stats["total_messages"] / max(m_stats["span_days"] / 7, 1)
             lines.append(f"  Per week:         {per_week:.1f} messages")
@@ -65,29 +65,29 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str) -> 
         h_total = h_stats["total_huddles"]
         h_you_pct = (h_stats["started_by_you"] / h_total * 100) if h_total else 0
         h_them_pct = (h_stats["started_by_them"] / h_total * 100) if h_total else 0
-        lines.append(f"  Huddles    You: {h_stats['started_by_you']} ({h_you_pct:.0f}%)     Them: {h_stats['started_by_them']} ({h_them_pct:.0f}%)")
+        lines.append(f"  Huddles    {your_name}: {h_stats['started_by_you']} ({h_you_pct:.0f}%)     Them: {h_stats['started_by_them']} ({h_them_pct:.0f}%)")
     if has_messages:
         m_init_total = m_stats["you_initiated"] + m_stats["them_initiated"]
         if m_init_total > 0:
             m_you_pct = m_stats["you_initiated"] / m_init_total * 100
             m_them_pct = m_stats["them_initiated"] / m_init_total * 100
-            lines.append(f"  Messages   You: {m_stats['you_initiated']} ({m_you_pct:.0f}%)     Them: {m_stats['them_initiated']} ({m_them_pct:.0f}%)")
+            lines.append(f"  Messages   {your_name}: {m_stats['you_initiated']} ({m_you_pct:.0f}%)     Them: {m_stats['them_initiated']} ({m_them_pct:.0f}%)")
     lines.append("")
 
     # --- Response Time ---
     if has_messages and (m_stats["your_avg_response_seconds"] > 0 or m_stats["their_avg_response_seconds"] > 0):
         lines.append("Response Time (Messages)")
         lines.append("-" * 55)
-        lines.append(f"  Your avg reply:   {format_duration(m_stats['your_avg_response_seconds'])}")
-        lines.append(f"  Their avg reply:  {format_duration(m_stats['their_avg_response_seconds'])}")
+        lines.append(f"  {your_name + ':':<16} {format_duration(m_stats['your_avg_response_seconds'])} avg reply")
+        lines.append(f"  {'Them:':<16} {format_duration(m_stats['their_avg_response_seconds'])} avg reply")
         lines.append("")
 
     # --- Message Style ---
     if has_messages:
         lines.append("Message Style")
         lines.append("-" * 55)
-        lines.append(f"  Your avg length:  {m_stats['your_avg_words']:.1f} words")
-        lines.append(f"  Their avg length: {m_stats['their_avg_words']:.1f} words")
+        lines.append(f"  {your_name + ':':<16} {m_stats['your_avg_words']:.1f} words avg")
+        lines.append(f"  {'Them:':<16} {m_stats['their_avg_words']:.1f} words avg")
         lines.append("")
 
     # --- Frequency (combined) ---

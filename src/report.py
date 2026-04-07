@@ -90,7 +90,7 @@ def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None 
     }
 
 
-def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str], str]) -> str:
+def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str], str], your_name: str = "You") -> str:
     if stats["total_huddles"] == 0:
         return f"\nHuddle Time Report\n==================\nChannel: {channel_label}\n\nNo huddles found.\n"
 
@@ -136,8 +136,8 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
     total = stats["total_huddles"]
     you_pct = (stats["started_by_you"] / total) * 100
     them_pct = (stats["started_by_them"] / total) * 100
-    lines.append(f"  You:              {stats['started_by_you']} ({you_pct:.0f}%)")
-    lines.append(f"  Them:             {stats['started_by_them']} ({them_pct:.0f}%)")
+    lines.append(f"  {your_name + ':':<16} {stats['started_by_you']} ({you_pct:.0f}%)")
+    lines.append(f"  {'Them:':<16} {stats['started_by_them']} ({them_pct:.0f}%)")
 
     # Busiest day of week
     weekday = stats.get("weekday_breakdown", {})

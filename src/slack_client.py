@@ -72,6 +72,7 @@ class SlackClient:
         self.user_id = user_id
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
+        self._own_first_name: str | None = None
         # Per-endpoint request timestamp tracking
         self._endpoint_timestamps: dict[str, list[float]] = {}
 
@@ -271,7 +272,11 @@ class SlackClient:
 
     def resolve_user_name(self, user_id: str) -> str:
         if user_id == self.user_id:
-            return "You"
+            if self._own_first_name is None:
+                data = self._get("users.info", {"user": user_id})
+                full_name = data.get("user", {}).get("real_name", user_id)
+                self._own_first_name = full_name.split()[0] if full_name else user_id
+            return self._own_first_name
         if user_id in self._user_cache:
             return self._user_cache[user_id]
         data = self._get("users.info", {"user": user_id})

@@ -207,18 +207,21 @@ def main(argv: list[str] | None = None):
         ch_names = ", ".join(f"#{ch['name']}" for ch in extra_channels)
         sources_label = f"{label} + {ch_names}"
 
+    your_name = client.resolve_user_name(user_id)
+    filter_target = target_user_id if extra_channels else None
+
     if analytics_choice == "2":
-        stats = compute_message_stats(all_messages, user_id, target_user_id if extra_channels else None)
-        print(format_message_report(stats, sources_label))
+        stats = compute_message_stats(all_messages, user_id, filter_target)
+        print(format_message_report(stats, sources_label, your_name))
     elif analytics_choice == "3":
         huddles = extract_huddles(all_messages)
-        h_stats = compute_stats(huddles, user_id, target_user_id if extra_channels else None)
-        m_stats = compute_message_stats(all_messages, user_id, target_user_id if extra_channels else None)
-        print(format_combined_report(h_stats, m_stats, sources_label))
+        h_stats = compute_stats(huddles, user_id, filter_target)
+        m_stats = compute_message_stats(all_messages, user_id, filter_target)
+        print(format_combined_report(h_stats, m_stats, sources_label, your_name))
     else:
         huddles = extract_huddles(all_messages)
-        stats = compute_stats(huddles, user_id, target_user_id if extra_channels else None)
-        print(format_report(stats, sources_label, client.resolve_user_name))
+        stats = compute_stats(huddles, user_id, filter_target)
+        print(format_report(stats, sources_label, client.resolve_user_name, your_name))
 
 
 if __name__ == "__main__":

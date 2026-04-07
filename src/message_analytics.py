@@ -123,7 +123,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     }
 
 
-def format_message_report(stats: dict, channel_label: str) -> str:
+def format_message_report(stats: dict, channel_label: str, your_name: str = "You") -> str:
     if stats["total_messages"] == 0:
         return f"\nMessage Analytics\n=================\nChannel: {channel_label}\n\nNo messages found.\n"
 
@@ -143,8 +143,8 @@ def format_message_report(stats: dict, channel_label: str) -> str:
     lines.append("Volume")
     lines.append("-" * 50)
     lines.append(f"  Total messages:   {stats['total_messages']:,}")
-    lines.append(f"  You:              {stats['you_count']:,} ({stats['you_pct']:.0f}%)")
-    lines.append(f"  Them:             {stats['them_count']:,} ({stats['them_pct']:.0f}%)")
+    lines.append(f"  {your_name + ':':<16} {stats['you_count']:,} ({stats['you_pct']:.0f}%)")
+    lines.append(f"  {'Them:':<16} {stats['them_count']:,} ({stats['them_pct']:.0f}%)")
     if stats["span_days"] > 0:
         per_week = stats["total_messages"] / max(stats["span_days"] / 7, 1)
         lines.append(f"  Per week:         {per_week:.1f} messages")
@@ -157,8 +157,8 @@ def format_message_report(stats: dict, channel_label: str) -> str:
         lines.append("-" * 50)
         you_init_pct = stats["you_initiated"] / total_init * 100
         them_init_pct = stats["them_initiated"] / total_init * 100
-        lines.append(f"  You:              {stats['you_initiated']} ({you_init_pct:.0f}%)")
-        lines.append(f"  Them:             {stats['them_initiated']} ({them_init_pct:.0f}%)")
+        lines.append(f"  {your_name + ':':<16} {stats['you_initiated']} ({you_init_pct:.0f}%)")
+        lines.append(f"  {'Them:':<16} {stats['them_initiated']} ({them_init_pct:.0f}%)")
         lines.append(f"  (gap threshold: 4 hours)")
 
     # Response time
@@ -166,15 +166,15 @@ def format_message_report(stats: dict, channel_label: str) -> str:
         lines.append("")
         lines.append("Response Time")
         lines.append("-" * 50)
-        lines.append(f"  Your avg reply:   {format_duration(stats['your_avg_response_seconds'])}")
-        lines.append(f"  Their avg reply:  {format_duration(stats['their_avg_response_seconds'])}")
+        lines.append(f"  {your_name + ':':<16} {format_duration(stats['your_avg_response_seconds'])} avg reply")
+        lines.append(f"  {'Them:':<16} {format_duration(stats['their_avg_response_seconds'])} avg reply")
 
     # Message style
     lines.append("")
     lines.append("Message Style")
     lines.append("-" * 50)
-    lines.append(f"  Your avg length:  {stats['your_avg_words']:.1f} words")
-    lines.append(f"  Their avg length: {stats['their_avg_words']:.1f} words")
+    lines.append(f"  {your_name + ':':<16} {stats['your_avg_words']:.1f} words avg")
+    lines.append(f"  {'Them:':<16} {stats['their_avg_words']:.1f} words avg")
 
     # Hourly breakdown - top 5 hours
     hourly = stats.get("hourly_breakdown", {})
