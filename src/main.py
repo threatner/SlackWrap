@@ -6,6 +6,7 @@ from src.cache import CacheManager
 from src.slack_client import SlackClient
 from src.report import extract_huddles, compute_stats, format_report
 from src.message_analytics import compute_message_stats, format_message_report
+from src.combined_report import format_combined_report
 
 
 def build_search_results(
@@ -148,9 +149,8 @@ def main(argv: list[str] | None = None):
     elif analytics_choice == "3":
         huddles = extract_huddles(messages)
         h_stats = compute_stats(huddles, user_id)
-        print(format_report(h_stats, selected["label"], client.resolve_user_name))
         m_stats = compute_message_stats(messages, user_id)
-        print(format_message_report(m_stats, selected["label"]))
+        print(format_combined_report(h_stats, m_stats, selected["label"]))
     else:
         huddles = extract_huddles(messages)
         stats = compute_stats(huddles, user_id)

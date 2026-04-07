@@ -182,26 +182,19 @@ def format_message_report(stats: dict, channel_label: str) -> str:
         lines.append("-" * 50)
         top_hours = sorted(hourly.items(), key=lambda x: x[1], reverse=True)[:5]
         top_hours.sort(key=lambda x: x[0])
-        max_count = max(c for _, c in top_hours) if top_hours else 1
         for hour, count in top_hours:
-            bar_len = int(count / max_count * 20)
-            bar = "#" * bar_len
-            label = f"{hour:02d}:00"
-            lines.append(f"  {label}  {bar:<20}  ({count:,})")
+            lines.append(f"  {hour:02d}:00         {count:>6,}")
 
     # Day of week
     weekday = stats.get("weekday_breakdown", {})
     if weekday:
         day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         sorted_days = sorted(weekday.items(), key=lambda x: day_order.index(x[0]) if x[0] in day_order else 7)
-        max_count = max(c for _, c in sorted_days) if sorted_days else 1
         lines.append("")
         lines.append("By Day of Week")
         lines.append("-" * 50)
         for day, count in sorted_days:
-            bar_len = int(count / max_count * 20)
-            bar = "#" * bar_len
-            lines.append(f"  {day:<12} {count:>5,}  {bar}")
+            lines.append(f"  {day:<12} {count:>8,}")
 
     lines.append("")
     return "\n".join(lines)

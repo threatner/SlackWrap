@@ -143,8 +143,7 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
         lines.append("By Day of Week")
         lines.append("-" * 50)
         for day, count in sorted_days:
-            bar = "#" * count
-            lines.append(f"  {day:<12} {count:>3}  {bar}")
+            lines.append(f"  {day:<12} {count:>5}")
 
     lines.append("")
     return "\n".join(lines)
