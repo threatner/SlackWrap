@@ -181,6 +181,52 @@ class TestFetchHuddles:
         assert len(huddles) == 2
 
 
+class TestFetchMessages:
+    def test_fetches_all_messages(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        history_response = {
+            "ok": True,
+            "messages": [
+                {"type": "message", "user": "U001", "ts": "1700000060.000", "text": "world"},
+                {"type": "message", "user": "U_ME", "ts": "1700000000.000", "text": "hello"},
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(history_response)):
+            messages = client.fetch_messages("C12345")
+        assert len(messages) == 2
+
+    def test_fetches_with_oldest_param(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        history_response = {
+            "ok": True,
+            "messages": [{"type": "message", "user": "U001", "ts": "1700000120.000", "text": "new"}],
+            "has_more": False,
+        }
+        mock_get = MagicMock(return_value=_mock_response(history_response))
+        with patch("src.slack_client.requests.get", mock_get):
+            messages = client.fetch_messages("C12345", oldest="1700000060.000")
+        call_params = mock_get.call_args[1]["params"]
+        assert call_params["oldest"] == "1700000060.000"
+        assert len(messages) == 1
+
+    def test_paginates_messages(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        page1 = {
+            "ok": True,
+            "messages": [{"type": "message", "user": "U001", "ts": "2.0", "text": "b"}],
+            "has_more": True, "response_metadata": {"next_cursor": "cursor_abc"},
+        }
+        page2 = {
+            "ok": True,
+            "messages": [{"type": "message", "user": "U_ME", "ts": "1.0", "text": "a"}],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", side_effect=[_mock_response(page1), _mock_response(page2)]):
+            messages = client.fetch_messages("C12345")
+        assert len(messages) == 2
+
+
 class TestResolveUserName:
     def test_returns_display_name(self):
         client = SlackClient(token="xoxp-fake", user_id="U_ME")

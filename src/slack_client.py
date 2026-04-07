@@ -115,32 +115,38 @@ class SlackClient:
         _clear_status()
         return matches
 
-    def fetch_huddles(self, channel_id: str) -> list[dict]:
-        huddles = []
+    def fetch_messages(self, channel_id: str, oldest: str | None = None) -> list[dict]:
+        messages = []
         cursor = ""
         page = 0
-        messages_scanned = 0
         while True:
             page += 1
-            _print_status(f"Scanning messages... (page {page}, {messages_scanned} scanned, {len(huddles)} huddles found)")
+            _print_status(f"Fetching messages... (page {page}, {len(messages)} fetched)")
             params = {"channel": channel_id, "limit": 200}
+            if oldest:
+                params["oldest"] = oldest
             if cursor:
                 params["cursor"] = cursor
             data = self._get("conversations.history", params)
-            for msg in data.get("messages", []):
-                messages_scanned += 1
-                if msg.get("subtype") != "huddle_thread":
-                    continue
-                room = msg.get("room", {})
-                if not room.get("has_ended"):
-                    continue
-                huddles.append(msg)
+            messages.extend(data.get("messages", []))
             if not data.get("has_more"):
                 break
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
                 break
         _clear_status()
+        return messages
+
+    def fetch_huddles(self, channel_id: str) -> list[dict]:
+        messages = self.fetch_messages(channel_id)
+        huddles = []
+        for msg in messages:
+            if msg.get("subtype") != "huddle_thread":
+                continue
+            room = msg.get("room", {})
+            if not room.get("has_ended"):
+                continue
+            huddles.append(msg)
         return huddles
 
     def resolve_user_name(self, user_id: str) -> str:
