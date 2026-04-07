@@ -1,0 +1,35 @@
+from src.main import build_search_results
+
+
+class TestBuildSearchResults:
+    def test_combines_dm_and_channel_results(self):
+        users = [
+            {"id": "U001", "real_name": "John Smith"},
+            {"id": "U002", "real_name": "Johnny B"},
+        ]
+        dm_channels = [
+            {"id": "D001", "user": "U001"},
+            {"id": "D003", "user": "U003"},
+        ]
+        channels = [
+            {"id": "C001", "name": "john-project"},
+        ]
+        results = build_search_results(users, dm_channels, channels)
+
+        assert len(results) == 2
+        assert results[0] == {"channel_id": "D001", "label": "John Smith (DM)"}
+        assert results[1] == {"channel_id": "C001", "label": "#john-project (channel)"}
+
+    def test_skips_users_without_dm(self):
+        users = [
+            {"id": "U001", "real_name": "John Smith"},
+            {"id": "U002", "real_name": "Johnny B"},
+        ]
+        dm_channels = [
+            {"id": "D001", "user": "U001"},
+        ]
+        channels = []
+        results = build_search_results(users, dm_channels, channels)
+
+        assert len(results) == 1
+        assert results[0]["label"] == "John Smith (DM)"
