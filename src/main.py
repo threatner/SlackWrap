@@ -180,7 +180,9 @@ def main(argv: list[str] | None = None):
     # For DM selections, offer shared channel inclusion
     extra_channels = []
     if is_dm:
-        extra_channels = select_shared_channels(client, target_user_id, target_name)
+        include = input(f"\nInclude shared channels with {target_name}? (y/n): ").strip().lower()
+        if include == "y":
+            extra_channels = select_shared_channels(client, target_user_id, target_name)
 
     # Analytics type selection
     label = selected["label"]
