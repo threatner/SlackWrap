@@ -136,7 +136,19 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         lines.append("Message Style")
         lines.append("-" * 55)
         lines.append(f"  {your_name + ':':<16} {m_stats['your_avg_words']:.1f} words avg")
-        lines.append(f"  {their_name + ":":<16} {m_stats['their_avg_words']:.1f} words avg")
+        lines.append(f"  {their_name + ':':<16} {m_stats['their_avg_words']:.1f} words avg")
+        lines.append("")
+
+    # --- Most Used Words ---
+    if has_messages and (m_stats.get("your_top_words") or m_stats.get("their_top_words")):
+        lines.append("Most Used Words")
+        lines.append("-" * 55)
+        if m_stats.get("your_top_words"):
+            top_str = ", ".join(f"{word} ({count})" for word, count in m_stats["your_top_words"])
+            lines.append(f"  {your_name + ':':<16} {top_str}")
+        if m_stats.get("their_top_words"):
+            top_str = ", ".join(f"{word} ({count})" for word, count in m_stats["their_top_words"])
+            lines.append(f"  {their_name + ':':<16} {top_str}")
         lines.append("")
 
     # --- Conversation Streaks ---

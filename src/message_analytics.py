@@ -22,6 +22,8 @@ _MENTION_RE = re.compile(r"<@[A-Z0-9]+(?:\|[^>]*)?>")  # <@U12345> or <@U12345|n
 _LINK_RE = re.compile(r"<https?://[^>]+>")  # <https://...|label>
 _EMOJI_RE = re.compile(r":[a-zA-Z0-9_+-]+:")  # :thumbsup:
 _EMOJI_EXTRACT_RE = re.compile(r":([a-zA-Z0-9_+-]+):")  # capture emoji names from text
+_WORD_TOKEN_RE = re.compile(r"[a-zA-Z]{3,}")  # words with 3+ letters only
+
 
 
 def _extract_text_emojis(text: str) -> list[str]:
@@ -46,6 +48,17 @@ def _clean_text_for_word_count_prestripped(text: str) -> str:
     text = _LINK_RE.sub("", text)
     text = _EMOJI_RE.sub("", text)
     return text.strip()
+
+
+def _count_top_words(texts: list[str], n: int = 10) -> list[tuple[str, int]]:
+    word_counter: Counter[str] = Counter()
+    for text in texts:
+        cleaned = _MENTION_RE.sub("", text)
+        cleaned = _LINK_RE.sub("", cleaned)
+        cleaned = _EMOJI_RE.sub("", cleaned)
+        words = _WORD_TOKEN_RE.findall(cleaned.lower())
+        word_counter.update(words)
+    return word_counter.most_common(n)
 
 
 def _filter_user_messages(messages: list[dict]) -> list[dict]:
@@ -110,6 +123,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "top_reactions": [], "your_top_reactions": [], "their_top_reactions": [],
             "your_text_emoji_total": 0, "their_text_emoji_total": 0,
             "your_top_text_emojis": [], "their_top_text_emojis": [],
+            "your_top_words": [], "their_top_words": [],
             "trend_last_30d_count": 0,
             "trend_prev_30d_count": 0,
             "trend_30d_pct_change": None,
@@ -317,6 +331,12 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     your_top_text_emojis = your_text_emoji_counter.most_common(5)
     their_top_text_emojis = their_text_emoji_counter.most_common(5)
 
+    # --- Most Used Words ---
+    your_cleaned_texts = [_cleaned_texts[m["ts"]] for m in you_msgs if m["ts"] in _cleaned_texts]
+    their_cleaned_texts = [_cleaned_texts[m["ts"]] for m in them_msgs if m["ts"] in _cleaned_texts]
+    your_top_words = _count_top_words(your_cleaned_texts)
+    their_top_words = _count_top_words(their_cleaned_texts)
+
     # --- Response Time by Hour ---
     response_by_hour: dict[int, list[int]] = {}
     for i in range(1, len(turns)):
@@ -410,6 +430,8 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "their_text_emoji_total": their_text_emoji_total,
         "your_top_text_emojis": your_top_text_emojis,
         "their_top_text_emojis": their_top_text_emojis,
+        "your_top_words": your_top_words,
+        "their_top_words": their_top_words,
         "trend_last_30d_count": trend_last_30d,
         "trend_prev_30d_count": trend_prev_30d,
         "trend_30d_pct_change": trend_30d_pct,
@@ -524,6 +546,18 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
     lines.append("-" * 50)
     lines.append(f"  {your_name + ':':<16} {stats['your_avg_words']:.1f} words avg")
     lines.append(f"  {their_name + ':':<16} {stats['their_avg_words']:.1f} words avg")
+
+    # Most used words
+    if stats.get("your_top_words") or stats.get("their_top_words"):
+        lines.append("")
+        lines.append("Most Used Words")
+        lines.append("-" * 50)
+        if stats.get("your_top_words"):
+            top_str = ", ".join(f"{word} ({count})" for word, count in stats["your_top_words"])
+            lines.append(f"  {your_name + ':':<16} {top_str}")
+        if stats.get("their_top_words"):
+            top_str = ", ".join(f"{word} ({count})" for word, count in stats["their_top_words"])
+            lines.append(f"  {their_name + ':':<16} {top_str}")
 
     # Conversation Streaks
     if stats.get("longest_streak_days", 0) > 0:

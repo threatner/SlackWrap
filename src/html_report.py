@@ -99,6 +99,22 @@ def generate_html_report(
             <div class="stat-row"><span class="label">{their_name}</span><span class="value">{m_stats['their_avg_words']:.1f} words avg</span></div>
         """))
 
+    # Most used words
+    if has_messages and (m_stats.get("your_top_words") or m_stats.get("their_top_words")):
+        words_html = f'<div class="stat-row"><span class="label">{your_name}</span></div>'
+        if m_stats.get("your_top_words"):
+            words_html += '<div class="emoji-row">' + " ".join(
+                f'<span class="emoji-badge">{word} <small>{count}</small></span>'
+                for word, count in m_stats["your_top_words"]
+            ) + '</div>'
+        words_html += f'<div class="stat-row"><span class="label">{their_name}</span></div>'
+        if m_stats.get("their_top_words"):
+            words_html += '<div class="emoji-row">' + " ".join(
+                f'<span class="emoji-badge">{word} <small>{count}</small></span>'
+                for word, count in m_stats["their_top_words"]
+            ) + '</div>'
+        cards.append(_card("Most Used Words", words_html))
+
     # Streaks & dead zones
     if has_messages and (m_stats.get("longest_streak_days", 0) > 0 or m_stats.get("longest_gap_seconds", 0) > 0):
         streak_html = ""
