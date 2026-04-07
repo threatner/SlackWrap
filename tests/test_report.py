@@ -3,16 +3,25 @@ from src.report import format_duration, compute_stats, format_report
 
 class TestFormatDuration:
     def test_minutes_only(self):
-        assert format_duration(900) == "0h 15m"
+        assert format_duration(900) == "15m"
 
     def test_hours_and_minutes(self):
         assert format_duration(3900) == "1h 05m"
 
     def test_zero(self):
-        assert format_duration(0) == "0h 00m"
+        assert format_duration(0) == "0s"
 
     def test_exact_hour(self):
-        assert format_duration(7200) == "2h 00m"
+        assert format_duration(7200) == "2h"
+
+    def test_days_hours_minutes(self):
+        assert format_duration(90060) == "1d 1h 01m"
+
+    def test_days_only(self):
+        assert format_duration(172800) == "2d"
+
+    def test_seconds_only(self):
+        assert format_duration(45) == "45s"
 
 
 class TestComputeStats:
@@ -29,6 +38,9 @@ class TestComputeStats:
         assert stats["avg_seconds"] == (1000 + 3600 + 1800) // 3
         assert stats["longest_seconds"] == 3600
         assert stats["shortest_seconds"] == 1000
+        assert stats["median_seconds"] == 1800
+        assert stats["started_by_you"] == 1
+        assert stats["started_by_them"] == 2
 
     def test_filters_huddles_without_user(self):
         huddles = [
@@ -44,6 +56,16 @@ class TestComputeStats:
         stats = compute_stats([], "U_ME")
         assert stats["total_huddles"] == 0
         assert stats["total_seconds"] == 0
+        assert stats["median_seconds"] == 0
+        assert stats["started_by_you"] == 0
+
+    def test_median_even_count(self):
+        huddles = [
+            {"room": {"date_start": 1000, "date_end": 2000, "created_by": "U001", "participant_history": ["U_ME", "U001"]}},
+            {"room": {"date_start": 3000, "date_end": 6600, "created_by": "U001", "participant_history": ["U_ME", "U001"]}},
+        ]
+        stats = compute_stats(huddles, "U_ME")
+        assert stats["median_seconds"] == (1000 + 3600) // 2
 
 
 class TestFormatReport:
@@ -61,13 +83,19 @@ class TestFormatReport:
 
         assert "Huddle Time Report" in output
         assert "DM with Alice" in output
-        assert "Total huddles: 2" in output
-        assert "Alice" in output
-        assert "You" in output
+        assert "Total huddles:" in output
         assert "Total time:" in output
-        assert "Avg per huddle:" in output
-        assert "Longest huddle:" in output
-        assert "Shortest huddle:" in output
+        assert "Average:" in output
+        assert "Median:" in output
+        assert "Longest:" in output
+        assert "Shortest:" in output
+        assert "Per week:" in output
+        assert "Per month:" in output
+        assert "Who Starts Huddles" in output
+        assert "You:" in output
+        assert "Them:" in output
+        assert "Monthly Breakdown" in output
+        assert "By Day of Week" in output
 
     def test_formats_empty_report(self):
         stats = compute_stats([], "U_ME")

@@ -1,11 +1,22 @@
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Callable
 
 
 def format_duration(seconds: int) -> str:
-    hours = seconds // 3600
+    if seconds < 60:
+        return f"{seconds}s"
+    days = seconds // 86400
+    hours = (seconds % 86400) // 3600
     minutes = (seconds % 3600) // 60
-    return f"{hours}h {minutes:02d}m"
+    parts = []
+    if days > 0:
+        parts.append(f"{days}d")
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes:02d}m" if parts else f"{minutes}m")
+    return " ".join(parts) if parts else "0m"
 
 
 def compute_stats(huddles: list[dict], user_id: str) -> dict:
@@ -20,19 +31,45 @@ def compute_stats(huddles: list[dict], user_id: str) -> dict:
             "avg_seconds": 0,
             "longest_seconds": 0,
             "shortest_seconds": 0,
+            "median_seconds": 0,
             "huddles": [],
+            "started_by_you": 0,
+            "started_by_them": 0,
+            "monthly_breakdown": {},
+            "weekday_breakdown": {},
         }
     durations = [
         h["room"]["date_end"] - h["room"]["date_start"]
         for h in user_huddles
     ]
+    sorted_durations = sorted(durations)
+    n = len(sorted_durations)
+    if n % 2 == 1:
+        median = sorted_durations[n // 2]
+    else:
+        median = (sorted_durations[n // 2 - 1] + sorted_durations[n // 2]) // 2
+
+    started_by_you = sum(1 for h in user_huddles if h["room"]["created_by"] == user_id)
+
+    monthly: Counter[str] = Counter()
+    weekday: Counter[str] = Counter()
+    for h in user_huddles:
+        dt = datetime.fromtimestamp(h["room"]["date_start"], tz=timezone.utc).astimezone()
+        monthly[dt.strftime("%Y-%m")] += 1
+        weekday[dt.strftime("%A")] += 1
+
     return {
         "total_huddles": len(user_huddles),
         "total_seconds": sum(durations),
         "avg_seconds": sum(durations) // len(durations),
         "longest_seconds": max(durations),
         "shortest_seconds": min(durations),
+        "median_seconds": median,
         "huddles": user_huddles,
+        "started_by_you": started_by_you,
+        "started_by_them": len(user_huddles) - started_by_you,
+        "monthly_breakdown": dict(sorted(monthly.items())),
+        "weekday_breakdown": dict(weekday),
     }
 
 
@@ -43,35 +80,71 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
     lines = []
     lines.append("")
     lines.append("Huddle Time Report")
-    lines.append("=" * 40)
-    lines.append(f"Channel: {channel_label}")
+    lines.append("=" * 50)
+    lines.append(f"Channel:  {channel_label}")
 
     huddles = stats["huddles"]
     all_timestamps = [h["room"]["date_start"] for h in huddles]
     first_date = datetime.fromtimestamp(min(all_timestamps), tz=timezone.utc).astimezone()
     last_date = datetime.fromtimestamp(max(all_timestamps), tz=timezone.utc).astimezone()
-    lines.append(f"Period:  {first_date.strftime('%Y-%m-%d')} -> {last_date.strftime('%Y-%m-%d')}")
-    lines.append(f"Total huddles: {stats['total_huddles']}")
-    lines.append("")
-    lines.append(f"{'Date':<13}{'Started By':<18}{'Duration'}")
-    lines.append("-" * 40)
-
-    sorted_huddles = sorted(huddles, key=lambda h: h["room"]["date_start"])
-    for h in sorted_huddles:
-        room = h["room"]
-        dt = datetime.fromtimestamp(room["date_start"], tz=timezone.utc).astimezone()
-        date_str = dt.strftime("%Y-%m-%d")
-        started_by = resolve_name(room["created_by"])
-        duration = format_duration(room["date_end"] - room["date_start"])
-        lines.append(f"{date_str:<13}{started_by:<18}{duration}")
-
-    lines.append("")
-    lines.append("Summary")
-    lines.append("-" * 40)
-    lines.append(f"Total time:      {format_duration(stats['total_seconds'])}")
-    lines.append(f"Avg per huddle:  {format_duration(stats['avg_seconds'])}")
-    lines.append(f"Longest huddle:  {format_duration(stats['longest_seconds'])}")
-    lines.append(f"Shortest huddle: {format_duration(stats['shortest_seconds'])}")
+    span_days = (last_date - first_date).days + 1
+    lines.append(f"Period:   {first_date.strftime('%Y-%m-%d')} -> {last_date.strftime('%Y-%m-%d')} ({span_days} days)")
     lines.append("")
 
+    # Time overview
+    lines.append("Time Overview")
+    lines.append("-" * 50)
+    lines.append(f"  Total time:       {format_duration(stats['total_seconds'])}")
+    lines.append(f"  Total huddles:    {stats['total_huddles']}")
+    lines.append(f"  Average:          {format_duration(stats['avg_seconds'])} per huddle")
+    lines.append(f"  Median:           {format_duration(stats['median_seconds'])} per huddle")
+    lines.append(f"  Longest:          {format_duration(stats['longest_seconds'])}")
+    lines.append(f"  Shortest:         {format_duration(stats['shortest_seconds'])}")
+
+    # Frequency
+    weeks = max(span_days / 7, 1)
+    months = max(span_days / 30, 1)
+    lines.append("")
+    lines.append("Frequency")
+    lines.append("-" * 50)
+    lines.append(f"  Per week:         {stats['total_huddles'] / weeks:.1f} huddles ({format_duration(int(stats['total_seconds'] / weeks))})")
+    lines.append(f"  Per month:        {stats['total_huddles'] / months:.1f} huddles ({format_duration(int(stats['total_seconds'] / months))})")
+
+    # Who initiates
+    lines.append("")
+    lines.append("Who Starts Huddles")
+    lines.append("-" * 50)
+    total = stats["total_huddles"]
+    you_pct = (stats["started_by_you"] / total) * 100
+    them_pct = (stats["started_by_them"] / total) * 100
+    lines.append(f"  You:              {stats['started_by_you']} ({you_pct:.0f}%)")
+    lines.append(f"  Them:             {stats['started_by_them']} ({them_pct:.0f}%)")
+
+    # Monthly breakdown
+    monthly = stats.get("monthly_breakdown", {})
+    if monthly:
+        lines.append("")
+        lines.append("Monthly Breakdown")
+        lines.append("-" * 50)
+        for month, count in monthly.items():
+            month_seconds = sum(
+                h["room"]["date_end"] - h["room"]["date_start"]
+                for h in huddles
+                if datetime.fromtimestamp(h["room"]["date_start"], tz=timezone.utc).astimezone().strftime("%Y-%m") == month
+            )
+            lines.append(f"  {month}:          {count} huddles, {format_duration(month_seconds)}")
+
+    # Busiest day of week
+    weekday = stats.get("weekday_breakdown", {})
+    if weekday:
+        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        sorted_days = sorted(weekday.items(), key=lambda x: day_order.index(x[0]) if x[0] in day_order else 7)
+        lines.append("")
+        lines.append("By Day of Week")
+        lines.append("-" * 50)
+        for day, count in sorted_days:
+            bar = "#" * count
+            lines.append(f"  {day:<12} {count:>3}  {bar}")
+
+    lines.append("")
     return "\n".join(lines)
