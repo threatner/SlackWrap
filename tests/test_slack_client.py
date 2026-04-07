@@ -45,3 +45,42 @@ class TestSearchUsers:
 
         assert len(results) == 1
         assert results[0]["id"] == "U001"
+
+
+class TestListDmChannels:
+    def test_returns_dm_channels(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        convos_response = {
+            "ok": True,
+            "channels": [
+                {"id": "D001", "user": "U001"},
+                {"id": "D002", "user": "U002"},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(convos_response)):
+            results = client.list_dm_channels()
+
+        assert len(results) == 2
+        assert results[0]["id"] == "D001"
+        assert results[0]["user"] == "U001"
+
+
+class TestSearchChannels:
+    def test_search_channels_filters_by_name(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        convos_response = {
+            "ok": True,
+            "channels": [
+                {"id": "C001", "name": "john-project", "is_im": False, "is_mpim": False},
+                {"id": "C002", "name": "engineering", "is_im": False, "is_mpim": False},
+                {"id": "C003", "name": "john-standup", "is_im": False, "is_mpim": False},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(convos_response)):
+            results = client.search_channels("john")
+
+        assert len(results) == 2
+        assert results[0]["id"] == "C001"
+        assert results[1]["id"] == "C003"

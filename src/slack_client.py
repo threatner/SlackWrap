@@ -41,3 +41,36 @@ class SlackClient:
                 break
             time.sleep(RATE_LIMIT_DELAY)
         return matches
+
+    def list_dm_channels(self) -> list[dict]:
+        channels = []
+        cursor = ""
+        while True:
+            params = {"types": "im", "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.list", params)
+            channels.extend(data.get("channels", []))
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+            time.sleep(RATE_LIMIT_DELAY)
+        return channels
+
+    def search_channels(self, query: str) -> list[dict]:
+        query_lower = query.lower()
+        matches = []
+        cursor = ""
+        while True:
+            params = {"types": "public_channel,private_channel", "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.list", params)
+            for ch in data.get("channels", []):
+                if query_lower in ch.get("name", "").lower():
+                    matches.append(ch)
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+            time.sleep(RATE_LIMIT_DELAY)
+        return matches
