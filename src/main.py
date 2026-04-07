@@ -208,20 +208,21 @@ def main(argv: list[str] | None = None):
         sources_label = f"{label} + {ch_names}"
 
     your_name = client.resolve_user_name(user_id)
+    their_name = target_name if is_dm else "Them"
     filter_target = target_user_id if extra_channels else None
 
     if analytics_choice == "2":
         stats = compute_message_stats(all_messages, user_id, filter_target)
-        print(format_message_report(stats, sources_label, your_name))
+        print(format_message_report(stats, sources_label, your_name, their_name))
     elif analytics_choice == "3":
         huddles = extract_huddles(all_messages)
         h_stats = compute_stats(huddles, user_id, filter_target)
         m_stats = compute_message_stats(all_messages, user_id, filter_target)
-        print(format_combined_report(h_stats, m_stats, sources_label, your_name))
+        print(format_combined_report(h_stats, m_stats, sources_label, your_name, their_name))
     else:
         huddles = extract_huddles(all_messages)
         stats = compute_stats(huddles, user_id, filter_target)
-        print(format_report(stats, sources_label, client.resolve_user_name, your_name))
+        print(format_report(stats, sources_label, client.resolve_user_name, your_name, their_name))
 
 
 if __name__ == "__main__":
