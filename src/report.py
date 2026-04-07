@@ -34,3 +34,43 @@ def compute_stats(huddles: list[dict], user_id: str) -> dict:
         "shortest_seconds": min(durations),
         "huddles": user_huddles,
     }
+
+
+def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str], str]) -> str:
+    if stats["total_huddles"] == 0:
+        return f"\nHuddle Time Report\n==================\nChannel: {channel_label}\n\nNo huddles found.\n"
+
+    lines = []
+    lines.append("")
+    lines.append("Huddle Time Report")
+    lines.append("=" * 40)
+    lines.append(f"Channel: {channel_label}")
+
+    huddles = stats["huddles"]
+    first_date = datetime.fromtimestamp(huddles[-1]["room"]["date_start"], tz=timezone.utc).astimezone()
+    last_date = datetime.fromtimestamp(huddles[0]["room"]["date_start"], tz=timezone.utc).astimezone()
+    lines.append(f"Period:  {first_date.strftime('%Y-%m-%d')} -> {last_date.strftime('%Y-%m-%d')}")
+    lines.append(f"Total huddles: {stats['total_huddles']}")
+    lines.append("")
+    lines.append(f"{'Date':<13}{'Started By':<18}{'Duration'}")
+    lines.append("-" * 40)
+
+    sorted_huddles = sorted(huddles, key=lambda h: h["room"]["date_start"])
+    for h in sorted_huddles:
+        room = h["room"]
+        dt = datetime.fromtimestamp(room["date_start"], tz=timezone.utc).astimezone()
+        date_str = dt.strftime("%Y-%m-%d")
+        started_by = resolve_name(room["created_by"])
+        duration = format_duration(room["date_end"] - room["date_start"])
+        lines.append(f"{date_str:<13}{started_by:<18}{duration}")
+
+    lines.append("")
+    lines.append("Summary")
+    lines.append("-" * 40)
+    lines.append(f"Total time:      {format_duration(stats['total_seconds'])}")
+    lines.append(f"Avg per huddle:  {format_duration(stats['avg_seconds'])}")
+    lines.append(f"Longest huddle:  {format_duration(stats['longest_seconds'])}")
+    lines.append(f"Shortest huddle: {format_duration(stats['shortest_seconds'])}")
+    lines.append("")
+
+    return "\n".join(lines)

@@ -1,4 +1,4 @@
-from src.report import format_duration, compute_stats
+from src.report import format_duration, compute_stats, format_report
 
 
 class TestFormatDuration:
@@ -44,3 +44,34 @@ class TestComputeStats:
         stats = compute_stats([], "U_ME")
         assert stats["total_huddles"] == 0
         assert stats["total_seconds"] == 0
+
+
+class TestFormatReport:
+    def test_formats_report_with_huddles(self):
+        huddles = [
+            {"room": {"date_start": 1700000000, "date_end": 1700001920, "created_by": "U001", "participant_history": ["U_ME", "U001"]}},
+            {"room": {"date_start": 1700100000, "date_end": 1700103600, "created_by": "U_ME", "participant_history": ["U_ME", "U001"]}},
+        ]
+        stats = compute_stats(huddles, "U_ME")
+
+        def mock_resolve(uid):
+            return {"U_ME": "You", "U001": "Alice"}.get(uid, uid)
+
+        output = format_report(stats, "DM with Alice", mock_resolve)
+
+        assert "Huddle Time Report" in output
+        assert "DM with Alice" in output
+        assert "Total huddles: 2" in output
+        assert "Alice" in output
+        assert "You" in output
+        assert "Total time:" in output
+        assert "Avg per huddle:" in output
+        assert "Longest huddle:" in output
+        assert "Shortest huddle:" in output
+
+    def test_formats_empty_report(self):
+        stats = compute_stats([], "U_ME")
+
+        output = format_report(stats, "DM with Alice", lambda uid: uid)
+
+        assert "No huddles found" in output
