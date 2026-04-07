@@ -79,7 +79,11 @@ class SlackClient:
         if user_id:
             self.user_id = user_id
         else:
-            data = self._get("auth.test")
+            resp = requests.get(f"{API_BASE}/auth.test", headers=self.headers)
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("ok"):
+                raise RuntimeError(f"Slack auth failed: {data.get('error', 'unknown')}")
             self.user_id = data["user_id"]
             self.username = data.get("user", "")
             self.team = data.get("team", "")
