@@ -171,6 +171,8 @@ def list_and_select_dm_contacts(client: SlackClient) -> dict:
         if not uid:
             continue
         name = client.resolve_user_name(uid)
+        if name == uid:
+            continue
         contacts.append({
             "channel_id": ch["id"],
             "label": f"{name} (DM)",
