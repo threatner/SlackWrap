@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+import requests
 from dotenv import load_dotenv
 from src.cache import CacheManager
 from src.slack_client import SlackClient
@@ -68,6 +69,8 @@ def fetch_with_cache(
         new_msgs = [CacheManager.trim_message(m) for m in new_raw if m.get("ts") not in existing_ts]
         if new_msgs:
             latest_new_ts = max(m["ts"] for m in new_msgs)
+            # Prevent regression: keep the higher of new max ts and the previously stored last_ts
+            latest_new_ts = max(latest_new_ts, last_ts)
             merged = cache.append(channel_id, new_msgs, last_ts=latest_new_ts)
             print(f"{prefix}+{len(new_msgs):,} new messages")
         else:
@@ -79,7 +82,7 @@ def fetch_with_cache(
         raw = client.fetch_messages(channel_id, include_threads=True)
         trimmed = [CacheManager.trim_message(m) for m in raw]
         if trimmed:
-            latest_ts = trimmed[0]["ts"]
+            latest_ts = max(m["ts"] for m in trimmed)
             cache.save(channel_id, trimmed, last_ts=latest_ts)
             print(f"{prefix}Cached {len(trimmed):,} messages")
         return trimmed
@@ -137,7 +140,19 @@ def main(argv: list[str] | None = None):
         print("  4. Copy the User OAuth Token (starts with xoxp-)")
         sys.exit(1)
 
-    client = SlackClient(token=token)
+    if not token.startswith("xoxp-"):
+        print("Warning: Token should start with 'xoxp-' (User OAuth Token)")
+        print("  Bot tokens (xoxb-) and app tokens (xoxa-) are not supported.")
+
+    try:
+        client = SlackClient(token=token)
+    except RuntimeError as e:
+        print(f"\n  Authentication failed: {e}")
+        print("  Check your SLACK_USER_TOKEN in .env")
+        sys.exit(1)
+    except requests.exceptions.RequestException as e:
+        print(f"\n  Connection error: {e}")
+        sys.exit(1)
     user_id = client.user_id
     print(f"\n  Logged in as {client.username} @ {client.team}")
     cache = CacheManager()
@@ -238,7 +253,10 @@ def main(argv: list[str] | None = None):
     # HTML report
     html_path = generate_html_report(h_stats, m_stats, sources_label, your_name, their_name)
     abs_path = os.path.abspath(html_path)
-    file_url = f"file://{abs_path}"
+    if sys.platform == "win32":
+        file_url = f"file:///{abs_path.replace(os.sep, '/')}"
+    else:
+        file_url = f"file://{abs_path}"
     print(f"\n  HTML report: {file_url}")
 
 

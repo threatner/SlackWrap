@@ -179,6 +179,16 @@ The Slack client tracks request counts per endpoint within a rolling 60-second w
 
 When the limit for a window is reached, the client calculates the exact remaining time until the oldest request in the window expires and sleeps only that long (burst-then-wait). If Slack returns a `429`, the `Retry-After` header is respected and the request is retried.
 
+## Privacy
+
+SlackWrap stores data locally on your machine:
+
+- **Cache** (`.cache/`): Message history is stored as plaintext JSON, including message text, user IDs, timestamps, and reactions. Use `--clear-cache` to delete all cached data.
+- **HTML Reports**: Generated reports contain message excerpts (first/last messages), analytics, and colleague names. Be mindful when sharing reports.
+- **Shared Channels**: When including shared channels, the cache stores all channel messages (not just between the two target users).
+
+No data is sent to any external server. The only network calls are to the Slack API using your token.
+
 ## Project Structure
 
 ```

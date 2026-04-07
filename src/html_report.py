@@ -17,6 +17,10 @@ def generate_html_report(
     has_huddles = h_stats is not None and h_stats.get("total_huddles", 0) > 0
     has_messages = m_stats is not None and m_stats.get("total_messages", 0) > 0
 
+    # Escape names once up-front to prevent XSS in all HTML interpolations
+    your_name = _escape(your_name)
+    their_name = _escape(their_name)
+
     # Period
     all_ts = []
     if has_huddles:
@@ -115,13 +119,13 @@ def generate_html_report(
         words_html = f'<div class="stat-row"><span class="label">{your_name}</span></div>'
         if m_stats.get("your_top_words"):
             words_html += '<div class="emoji-row">' + " ".join(
-                f'<span class="emoji-badge">{word} <small>{count}</small></span>'
+                f'<span class="emoji-badge">{_escape(word)} <small>{count}</small></span>'
                 for word, count in m_stats["your_top_words"]
             ) + '</div>'
         words_html += f'<div class="stat-row"><span class="label">{their_name}</span></div>'
         if m_stats.get("their_top_words"):
             words_html += '<div class="emoji-row">' + " ".join(
-                f'<span class="emoji-badge">{word} <small>{count}</small></span>'
+                f'<span class="emoji-badge">{_escape(word)} <small>{count}</small></span>'
                 for word, count in m_stats["their_top_words"]
             ) + '</div>'
         cards.append(_card("Most Used Words", words_html))

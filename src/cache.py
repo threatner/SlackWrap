@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 CACHE_VERSION = 2
 
@@ -9,7 +10,8 @@ class CacheManager:
         self.cache_dir = cache_dir
 
     def _path(self, channel_id: str) -> str:
-        return os.path.join(self.cache_dir, f"{channel_id}.json")
+        safe_id = re.sub(r'[^A-Za-z0-9_-]', '', channel_id)
+        return os.path.join(self.cache_dir, f"{safe_id}.json")
 
     @staticmethod
     def trim_message(msg: dict) -> dict:

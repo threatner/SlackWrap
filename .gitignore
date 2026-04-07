@@ -29,6 +29,9 @@ env/
 # Generated reports
 *.html
 
+# Scratch files
+analyze_dm.py
+
 # OS
 .DS_Store
 Thumbs.db

@@ -80,7 +80,7 @@ class SlackClient:
         if user_id:
             self.user_id = user_id
         else:
-            resp = requests.get(f"{API_BASE}/auth.test", headers=self.headers)
+            resp = requests.get(f"{API_BASE}/auth.test", headers=self.headers, timeout=30)
             resp.raise_for_status()
             data = resp.json()
             if not data.get("ok"):
@@ -119,7 +119,7 @@ class SlackClient:
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
         self._throttle_if_needed(endpoint)
-        resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
+        resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {}, timeout=30)
 
         # Handle 429 with retry loop
         while resp.status_code == 429:
@@ -128,7 +128,7 @@ class SlackClient:
             time.sleep(retry_after)
             self._get_endpoint_count(endpoint)
             self._throttle_if_needed(endpoint)
-            resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
+            resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {}, timeout=30)
 
         # Record this request
         self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())

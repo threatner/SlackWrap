@@ -159,14 +159,14 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         lines.append("-" * 55)
         streak_start_dt = datetime.fromtimestamp(m_stats["longest_streak_start"], tz=timezone.utc).astimezone()
         streak_end_dt = datetime.fromtimestamp(m_stats["longest_streak_end"], tz=timezone.utc).astimezone()
-        streak_range = f"{streak_start_dt.strftime('%b %-d')} - {streak_end_dt.strftime('%b %-d')}"
+        streak_range = f"{streak_start_dt.strftime('%b')} {streak_start_dt.day} - {streak_end_dt.strftime('%b')} {streak_end_dt.day}"
         lines.append(f"  Longest streak:   {m_stats['longest_streak_days']} days ({streak_range})")
         lines.append(f"  Current streak:   {m_stats['current_streak_days']} days")
         if m_stats.get("longest_gap_seconds", 0) > 0:
             gap_days = m_stats["longest_gap_seconds"] // 86400
             gap_start_dt = datetime.fromtimestamp(m_stats["longest_gap_start"], tz=timezone.utc).astimezone()
             gap_end_dt = datetime.fromtimestamp(m_stats["longest_gap_end"], tz=timezone.utc).astimezone()
-            gap_range = f"{gap_start_dt.strftime('%b %-d')} - {gap_end_dt.strftime('%b %-d')}"
+            gap_range = f"{gap_start_dt.strftime('%b')} {gap_start_dt.day} - {gap_end_dt.strftime('%b')} {gap_end_dt.day}"
             lines.append(f"  Longest silence:  {gap_days} days ({gap_range})")
         lines.append("")
 
