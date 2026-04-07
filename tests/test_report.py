@@ -94,7 +94,7 @@ class TestFormatReport:
         assert "Who Starts Huddles" in output
         assert "You:" in output
         assert "Them:" in output
-        assert "Monthly Breakdown" in output
+        assert "hours" in output.lower()
         assert "By Day of Week" in output
 
     def test_formats_empty_report(self):

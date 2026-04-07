@@ -94,9 +94,11 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
     # Time overview
     lines.append("Time Overview")
     lines.append("-" * 50)
-    lines.append(f"  Total time:       {format_duration(stats['total_seconds'])}")
+    total_hrs = stats['total_seconds'] / 3600
+    lines.append(f"  Total time:       {format_duration(stats['total_seconds'])} ({total_hrs:.1f} hours)")
     lines.append(f"  Total huddles:    {stats['total_huddles']}")
-    lines.append(f"  Average:          {format_duration(stats['avg_seconds'])} per huddle")
+    avg_hrs = stats['avg_seconds'] / 3600
+    lines.append(f"  Average:          {format_duration(stats['avg_seconds'])} per huddle ({avg_hrs:.1f} hrs)")
     lines.append(f"  Median:           {format_duration(stats['median_seconds'])} per huddle")
     lines.append(f"  Longest:          {format_duration(stats['longest_seconds'])}")
     lines.append(f"  Shortest:         {format_duration(stats['shortest_seconds'])}")
@@ -119,20 +121,6 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
     them_pct = (stats["started_by_them"] / total) * 100
     lines.append(f"  You:              {stats['started_by_you']} ({you_pct:.0f}%)")
     lines.append(f"  Them:             {stats['started_by_them']} ({them_pct:.0f}%)")
-
-    # Monthly breakdown
-    monthly = stats.get("monthly_breakdown", {})
-    if monthly:
-        lines.append("")
-        lines.append("Monthly Breakdown")
-        lines.append("-" * 50)
-        for month, count in monthly.items():
-            month_seconds = sum(
-                h["room"]["date_end"] - h["room"]["date_start"]
-                for h in huddles
-                if datetime.fromtimestamp(h["room"]["date_start"], tz=timezone.utc).astimezone().strftime("%Y-%m") == month
-            )
-            lines.append(f"  {month}:          {count} huddles, {format_duration(month_seconds)}")
 
     # Busiest day of week
     weekday = stats.get("weekday_breakdown", {})
