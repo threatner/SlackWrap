@@ -242,6 +242,91 @@ new Chart(document.getElementById('hourlyChart'), {{
 }});
 '''}
 
+// Emoji shortcode to Unicode mapping
+const emojiMap = {{
+  'thumbsup':'\ud83d\udc4d','thumbsdown':'\ud83d\udc4e','+1':'\ud83d\udc4d','-1':'\ud83d\udc4e',
+  'heart':'\u2764\ufe0f','fire':'\ud83d\udd25','eyes':'\ud83d\udc40','rocket':'\ud83d\ude80',
+  'tada':'\ud83c\udf89','100':'\ud83d\udcaf','pray':'\ud83d\ude4f','clap':'\ud83d\udc4f',
+  'smile':'\ud83d\ude04','laughing':'\ud83d\ude06','joy':'\ud83d\ude02','grinning':'\ud83d\ude00',
+  'smiley':'\ud83d\ude03','wink':'\ud83d\ude09','blush':'\ud83d\ude0a','relaxed':'\u263a\ufe0f',
+  'heart_eyes':'\ud83d\ude0d','kissing_heart':'\ud83d\ude18','stuck_out_tongue':'\ud83d\ude1b',
+  'stuck_out_tongue_winking_eye':'\ud83d\ude1c','sunglasses':'\ud83d\ude0e','smirk':'\ud83d\ude0f',
+  'unamused':'\ud83d\ude12','thinking_face':'\ud83e\udd14','raised_hands':'\ud83d\ude4c',
+  'muscle':'\ud83d\udcaa','point_up':'\u261d\ufe0f','ok_hand':'\ud83d\udc4c','v':'\u270c\ufe0f',
+  'wave':'\ud83d\udc4b','raised_hand':'\u270b','open_hands':'\ud83d\udc50',
+  'star':'\u2b50','star2':'\ud83c\udf1f','sparkles':'\u2728','zap':'\u26a1',
+  'sunny':'\u2600\ufe0f','cloud':'\u2601\ufe0f','snowflake':'\u2744\ufe0f',
+  'checkmark':'\u2714\ufe0f','white_check_mark':'\u2705','heavy_check_mark':'\u2714\ufe0f',
+  'x':'\u274c','warning':'\u26a0\ufe0f','no_entry':'\u26d4',
+  'red_circle':'\ud83d\udd34','large_blue_circle':'\ud83d\udd35','green_circle':'\ud83d\udfe2',
+  'bulb':'\ud83d\udca1','memo':'\ud83d\udcdd','pencil':'\u270f\ufe0f','pencil2':'\u270f\ufe0f',
+  'mag':'\ud83d\udd0d','link':'\ud83d\udd17','paperclip':'\ud83d\udcce',
+  'calendar':'\ud83d\udcc5','clock1':'\ud83d\udd50','hourglass':'\u231b',
+  'phone':'\ud83d\udcf1','computer':'\ud83d\udcbb','keyboard':'\u2328\ufe0f',
+  'email':'\ud83d\udce7','inbox_tray':'\ud83d\udce5','outbox_tray':'\ud83d\udce4',
+  'speech_balloon':'\ud83d\udcac','thought_balloon':'\ud83d\udcad',
+  'hammer':'\ud83d\udd28','wrench':'\ud83d\udd27','gear':'\u2699\ufe0f','package':'\ud83d\udce6',
+  'trophy':'\ud83c\udfc6','medal':'\ud83c\udfc5','crown':'\ud83d\udc51',
+  'gem':'\ud83d\udc8e','moneybag':'\ud83d\udcb0','dollar':'\ud83d\udcb5',
+  'chart_with_upwards_trend':'\ud83d\udcc8','chart_with_downwards_trend':'\ud83d\udcc9',
+  'bar_chart':'\ud83d\udcca',
+  'lock':'\ud83d\udd12','unlock':'\ud83d\udd13','key':'\ud83d\udd11',
+  'bell':'\ud83d\udd14','loudspeaker':'\ud83d\udce2','mega':'\ud83d\udce3',
+  'rotating_light':'\ud83d\udea8','police_car':'\ud83d\ude93',
+  'coffee':'\u2615','beer':'\ud83c\udf7a','pizza':'\ud83c\udf55','hamburger':'\ud83c\udf54',
+  'dog':'\ud83d\udc36','cat':'\ud83d\udc31','monkey':'\ud83d\udc35',
+  'see_no_evil':'\ud83d\ude48','hear_no_evil':'\ud83d\ude49','speak_no_evil':'\ud83d\ude4a',
+  'ghost':'\ud83d\udc7b','skull':'\ud83d\udca0','alien':'\ud83d\udc7d','robot_face':'\ud83e\udd16',
+  'poop':'\ud83d\udca9','hankey':'\ud83d\udca9',
+  'confused':'\ud83d\ude15','worried':'\ud83d\ude1f','cry':'\ud83d\ude22','sob':'\ud83d\ude2d',
+  'angry':'\ud83d\ude20','rage':'\ud83d\ude21','scream':'\ud83d\ude31','fearful':'\ud83d\ude28',
+  'sweat':'\ud83d\ude13','sweat_smile':'\ud83d\ude05','relieved':'\ud83d\ude0c',
+  'sleepy':'\ud83d\ude2a','sleeping':'\ud83d\ude34','dizzy_face':'\ud83d\ude35',
+  'nerd_face':'\ud83e\udd13','face_with_monocle':'\ud83e\uddd0',
+  'partying_face':'\ud83e\udd73','shushing_face':'\ud83e\udd2b',
+  'hugging_face':'\ud83e\udd17','zipper_mouth_face':'\ud83e\udd10',
+  'money_mouth_face':'\ud83e\udd11','exploding_head':'\ud83e\udd2f',
+  'saluting_face':'\ud83e\udee1','handshake':'\ud83e\udd1d',
+  'slightly_smiling_face':'\ud83d\ude42','upside_down_face':'\ud83d\ude43',
+  'rolling_on_the_floor_laughing':'\ud83e\udd23','rofl':'\ud83e\udd23',
+  'raised_eyebrow':'\ud83e\udd28','face_with_rolling_eyes':'\ud83d\ude44',
+  'grimacing':'\ud83d\ude2c','lying_face':'\ud83e\udd25','shrug':'\ud83e\udd37',
+  'facepalm':'\ud83e\udd26','man-shrugging':'\ud83e\udd37\u200d\u2642\ufe0f',
+  'woman-shrugging':'\ud83e\udd37\u200d\u2640\ufe0f',
+  'dart':'\ud83c\udfaf','bowling':'\ud83c\udfb3','video_game':'\ud83c\udfae',
+  'headphones':'\ud83c\udfa7','guitar':'\ud83c\udfb8','trumpet':'\ud83c\udfba',
+  'art':'\ud83c\udfa8','performing_arts':'\ud83c\udfad','microphone':'\ud83c\udfa4',
+  'books':'\ud83d\udcda','book':'\ud83d\udcd6','bookmark':'\ud83d\udd16',
+  'newspaper':'\ud83d\udcf0','scroll':'\ud83d\udcdc',
+  'earth_americas':'\ud83c\udf0e','earth_asia':'\ud83c\udf0f','earth_africa':'\ud83c\udf0d',
+  'rainbow':'\ud83c\udf08','ocean':'\ud83c\udf0a','mountain':'\u26f0\ufe0f',
+  'camping':'\ud83c\udfd5\ufe0f','house':'\ud83c\udfe0','office':'\ud83c\udfe2',
+  'airplane':'\u2708\ufe0f','car':'\ud83d\ude97','bus':'\ud83d\ude8c',
+  'ship':'\ud83d\udea2','bike':'\ud83d\udeb2',
+  'hourglass_flowing_sand':'\u23f3','stopwatch':'\u23f1\ufe0f','timer_clock':'\u23f2\ufe0f',
+  'alarm_clock':'\u23f0',
+  'pig':'\ud83d\udc37','chicken':'\ud83d\udc14','penguin':'\ud83d\udc27','butterfly':'\ud83e\udd8b',
+  'bee':'\ud83d\udc1d','ladybug':'\ud83d\udc1e','turtle':'\ud83d\udc22','snake':'\ud83d\udc0d',
+  'crab':'\ud83e\udd80','whale':'\ud83d\udc33','dolphin':'\ud83d\udc2c',
+  'apple':'\ud83c\udf4e','banana':'\ud83c\udf4c','grapes':'\ud83c\udf47','watermelon':'\ud83c\udf49',
+  'strawberry':'\ud83c\udf53','lemon':'\ud83c\udf4b','avocado':'\ud83e\udd51',
+  'taco':'\ud83c\udf2e','burrito':'\ud83c\udf2f','popcorn':'\ud83c\udf7f',
+  'cake':'\ud83c\udf82','cookie':'\ud83c\udf6a','chocolate_bar':'\ud83c\udf6b',
+  'wine_glass':'\ud83c\udf77','cocktail':'\ud83c\udf78','tropical_drink':'\ud83c\udf79',
+  'champagne':'\ud83c\udf7e',
+  'balloon':'\ud83c\udf88','gift':'\ud83c\udf81','ribbon':'\ud83c\udf80',
+  'confetti_ball':'\ud83c\udf8a','christmas_tree':'\ud83c\udf84','jack_o_lantern':'\ud83c\udf83',
+  'flag-us':'\ud83c\uddfa\ud83c\uddf8','flag-in':'\ud83c\uddee\ud83c\uddf3',
+}};
+// Replace :shortcode: with emoji in all .value and .quote elements
+document.addEventListener('DOMContentLoaded', () => {{
+  document.querySelectorAll('.value, .quote').forEach(el => {{
+    el.innerHTML = el.innerHTML.replace(/:([a-zA-Z0-9_+-]+):/g, (match, name) => {{
+      return emojiMap[name] ? `<span style="font-size:1.2em">${{emojiMap[name]}}</span>` : match;
+    }});
+  }});
+}});
+
 new Chart(document.getElementById('weekdayChart'), {{
     type: 'bar',
     data: {{
