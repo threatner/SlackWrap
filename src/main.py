@@ -115,105 +115,6 @@ def select_shared_channels(client: SlackClient, target_user_id: str, target_name
     return selected
 
 
-def _select_from_list(results: list[dict]) -> dict:
-    print()
-    for i, r in enumerate(results, 1):
-        print(f"  {i}. {r['label']}")
-    print()
-    choice = input(f"Select [1-{len(results)}]: ").strip()
-    try:
-        idx = int(choice) - 1
-        if idx < 0 or idx >= len(results):
-            raise ValueError
-    except ValueError:
-        print("Invalid selection.")
-        sys.exit(1)
-    return results[idx]
-
-
-def search_and_select(client: SlackClient) -> dict:
-    query = input("\nSearch for a person: ").strip()
-    if not query:
-        print("No search query entered.")
-        sys.exit(1)
-
-    print(f"\nSearching for '{query}'...")
-    users = client.search_users(query)
-    dm_channels = client.list_dm_channels()
-
-    dm_by_user = {ch["user"]: ch["id"] for ch in dm_channels}
-    results = []
-    for user in users:
-        dm_id = dm_by_user.get(user["id"])
-        if dm_id:
-            results.append({
-                "channel_id": dm_id,
-                "label": f"{user['real_name']} (DM)",
-                "type": "dm",
-                "target_user_id": user["id"],
-                "target_name": user["real_name"],
-            })
-
-    if not results:
-        print("No matches found.")
-        sys.exit(1)
-
-    return _select_from_list(results)
-
-
-def list_and_select_dm_contacts(client: SlackClient) -> dict:
-    print("\nLoading DM contacts...")
-    dm_channels = client.list_dm_channels()
-
-    contacts = []
-    for ch in dm_channels:
-        uid = ch.get("user")
-        if not uid:
-            continue
-        name = client.resolve_user_name(uid)
-        if name == uid:
-            continue
-        contacts.append({
-            "channel_id": ch["id"],
-            "label": f"{name} (DM)",
-            "type": "dm",
-            "target_user_id": uid,
-            "target_name": name,
-        })
-
-    contacts.sort(key=lambda c: c["target_name"].lower())
-
-    if not contacts:
-        print("No DM contacts found.")
-        sys.exit(1)
-
-    print(f"\nYour DM contacts ({len(contacts)}):")
-    for i, c in enumerate(contacts, 1):
-        print(f"  {i}. {c['target_name']}")
-    print()
-
-    filter_query = input("Select number or type to filter: ").strip()
-
-    # If it's a number, select directly
-    try:
-        idx = int(filter_query) - 1
-        if 0 <= idx < len(contacts):
-            return contacts[idx]
-    except ValueError:
-        pass
-
-    # Otherwise filter by name
-    filtered = [c for c in contacts if filter_query.lower() in c["target_name"].lower()]
-    if not filtered:
-        print("No matches found.")
-        sys.exit(1)
-    if len(filtered) == 1:
-        print(f"  -> {filtered[0]['target_name']}")
-        return filtered[0]
-
-    return _select_from_list(filtered)
-
-
 def main(argv: list[str] | None = None):
     args = parse_args(argv)
     load_dotenv()
@@ -242,15 +143,34 @@ def main(argv: list[str] | None = None):
         cache.clear_all()
         print("Cache cleared.")
 
-    print("\n  1. Search for a person")
-    print("  2. List all DM contacts")
-    print()
-    mode = input("Select [1-2]: ").strip()
+    query = input("\nSearch for a person or channel: ").strip()
+    if not query:
+        print("No search query entered.")
+        sys.exit(1)
 
-    if mode == "2":
-        selected = list_and_select_dm_contacts(client)
-    else:
-        selected = search_and_select(client)
+    print(f"\nSearching for '{query}'...")
+    users = client.search_users(query)
+    dm_channels = client.list_dm_channels()
+    channels = client.search_channels(query)
+
+    results = build_search_results(users, dm_channels, channels)
+    if not results:
+        print("No matches found.")
+        sys.exit(1)
+
+    print()
+    for i, r in enumerate(results, 1):
+        print(f"  {i}. {r['label']}")
+    print()
+
+    choice = input(f"Select [1-{len(results)}]: ").strip()
+    try:
+        idx = int(choice) - 1
+        if idx < 0 or idx >= len(results):
+            raise ValueError
+    except ValueError:
+        print("Invalid selection.")
+        sys.exit(1)
 
     selected = results[idx]
     is_dm = selected.get("type") == "dm"
