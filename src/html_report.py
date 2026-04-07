@@ -246,10 +246,12 @@ new Chart(document.getElementById('hourlyChart'), {{
 document.addEventListener('DOMContentLoaded', async () => {{
   let emojiMap = {{}};
   try {{
-    const resp = await fetch('https://cdn.jsdelivr.net/npm/gemoji@8.1.0/index.json');
+    const resp = await fetch('https://cdn.jsdelivr.net/npm/gemoji/index.json');
     const data = await resp.json();
-    data.forEach(e => {{ e.names.forEach(n => {{ emojiMap[n] = e.emoji; }}); }});
-  }} catch(e) {{}}
+    for (const [emoji, info] of Object.entries(data)) {{
+      if (info.names) info.names.forEach(n => {{ emojiMap[n] = emoji; }});
+    }}
+  }} catch(e) {{ console.warn('Could not load emoji map:', e); }}
   document.querySelectorAll('.value, .quote').forEach(el => {{
     el.innerHTML = el.innerHTML.replace(/:([a-zA-Z0-9_+-]+):/g, (match, name) => {{
       return emojiMap[name] ? `<span style="font-size:1.2em">${{emojiMap[name]}}</span>` : match;
