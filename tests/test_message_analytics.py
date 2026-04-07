@@ -104,11 +104,6 @@ class TestComputeMessageStats:
         # "here" + "done" = 2 words, code block stripped
         assert stats["your_avg_words"] == 2.0
 
-    def test_initiations(self):
-        stats = compute_message_stats(SAMPLE_MESSAGES, "U_ME")
-        assert stats["you_initiated"] == 1
-        assert stats["them_initiated"] == 1
-
     def test_response_time_turn_based(self):
         # A sends at t=0, A sends at t=300, B replies at t=360
         # Turn-based: turn A starts at t=0, turn B starts at t=360
@@ -221,7 +216,6 @@ class TestFormatMessageReport:
         assert "Message Analytics" in output
         assert "DM with Alice" in output
         assert "Total messages:" in output
-        assert "Who Starts Conversations" in output
         assert "Response Time" in output
         assert "median" in output
         assert "avg" in output

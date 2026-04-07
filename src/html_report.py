@@ -66,22 +66,15 @@ def generate_html_report(
     # Detail cards
     cards = []
 
-    # Who initiates
-    init_rows = ""
+    # Who starts huddles
     if has_huddles:
         h_total = h_stats["total_huddles"]
         h_you_pct = h_stats["started_by_you"] / h_total * 100 if h_total else 0
         h_them_pct = h_stats["started_by_them"] / h_total * 100 if h_total else 0
-        init_rows += f'<div class="stat-row"><span class="label">Huddles</span><span class="value">{your_name}: {h_stats["started_by_you"]} ({h_you_pct:.0f}%) &middot; {their_name}: {h_stats["started_by_them"]} ({h_them_pct:.0f}%)</span></div>'
-    if has_messages:
-        m_init_total = m_stats["you_initiated"] + m_stats["them_initiated"]
-        if m_init_total > 0:
-            m_you_pct = m_stats["you_initiated"] / m_init_total * 100
-            m_them_pct = m_stats["them_initiated"] / m_init_total * 100
-            init_rows += f'<div class="stat-row"><span class="label">Convos</span><span class="value">{your_name}: {m_stats["you_initiated"]} ({m_you_pct:.0f}%) &middot; {their_name}: {m_stats["them_initiated"]} ({m_them_pct:.0f}%)</span></div>'
-            init_rows += f'<div class="stat-row"><span class="label"></span><span class="value"><small>{m_init_total} conversations, 4hr gap</small></span></div>'
-    if init_rows:
-        cards.append(_card("Who Initiates", init_rows))
+        cards.append(_card("Who Starts Huddles", f"""
+            <div class="stat-row"><span class="label">{your_name}</span><span class="value">{h_stats["started_by_you"]} ({h_you_pct:.0f}%)</span></div>
+            <div class="stat-row"><span class="label">{their_name}</span><span class="value">{h_stats["started_by_them"]} ({h_them_pct:.0f}%)</span></div>
+        """))
 
     # Response time
     if has_messages and (m_stats["your_avg_response_seconds"] > 0 or m_stats["their_avg_response_seconds"] > 0):

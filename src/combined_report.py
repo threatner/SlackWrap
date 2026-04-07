@@ -87,22 +87,16 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
                 lines.append(f"  Threads started:  {your_name}: {you_started} / {their_name}: {them_started}")
             lines.append("")
 
-    # --- Who Initiates (combined) ---
-    lines.append("Who Initiates")
-    lines.append("-" * 55)
+    # --- Who Starts Huddles ---
     if has_huddles:
         h_total = h_stats["total_huddles"]
         h_you_pct = (h_stats["started_by_you"] / h_total * 100) if h_total else 0
         h_them_pct = (h_stats["started_by_them"] / h_total * 100) if h_total else 0
-        lines.append(f"  Huddles    {your_name}: {h_stats['started_by_you']} ({h_you_pct:.0f}%)     {their_name}: {h_stats['started_by_them']} ({h_them_pct:.0f}%)")
-    if has_messages:
-        m_init_total = m_stats["you_initiated"] + m_stats["them_initiated"]
-        if m_init_total > 0:
-            m_you_pct = m_stats["you_initiated"] / m_init_total * 100
-            m_them_pct = m_stats["them_initiated"] / m_init_total * 100
-            lines.append(f"  Convos     {your_name}: {m_stats['you_initiated']} ({m_you_pct:.0f}%)     {their_name}: {m_stats['them_initiated']} ({m_them_pct:.0f}%)")
-            lines.append(f"             ({m_init_total} conversations, 4hr gap threshold)")
-    lines.append("")
+        lines.append("Who Starts Huddles")
+        lines.append("-" * 55)
+        lines.append(f"  {your_name + ':':<16} {h_stats['started_by_you']} ({h_you_pct:.0f}%)")
+        lines.append(f"  {their_name + ':':<16} {h_stats['started_by_them']} ({h_them_pct:.0f}%)")
+        lines.append("")
 
     # --- Response Time ---
     if has_messages and (m_stats["your_avg_response_seconds"] > 0 or m_stats["their_avg_response_seconds"] > 0):

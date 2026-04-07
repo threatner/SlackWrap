@@ -14,7 +14,6 @@ SYSTEM_SUBTYPES = {
     "sh_room_created", "tombstone",
 }
 
-INITIATION_GAP_SECONDS = 4 * 3600  # 4 hours
 
 # Regex to strip Slack markup before word counting
 _CODE_BLOCK_RE = re.compile(r"```[\s\S]*?```")  # triple-backtick code blocks
@@ -99,7 +98,6 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "you_count": 0, "them_count": 0,
             "you_pct": 0.0, "them_pct": 0.0,
             "your_avg_words": 0.0, "their_avg_words": 0.0,
-            "you_initiated": 0, "them_initiated": 0,
             "your_avg_response_seconds": 0, "their_avg_response_seconds": 0,
             "your_median_response_seconds": 0, "their_median_response_seconds": 0,
             "weekday_breakdown": {}, "hourly_breakdown": {}, "monthly_breakdown": {},
@@ -157,22 +155,6 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     # Build conversation turns (collapse consecutive same-user messages)
     turns = _build_turns(sorted_msgs)
 
-    # Initiations: first turn after a gap > INITIATION_GAP_SECONDS
-    you_initiated = 0
-    them_initiated = 0
-    if turns:
-        if turns[0]["user"] == user_id:
-            you_initiated += 1
-        else:
-            them_initiated += 1
-        for i in range(1, len(turns)):
-            gap = turns[i]["start_ts"] - turns[i - 1]["end_ts"]
-            if gap >= INITIATION_GAP_SECONDS:
-                if turns[i]["user"] == user_id:
-                    you_initiated += 1
-                else:
-                    them_initiated += 1
-
     # Response times — measured turn-to-turn
     # From the START of turn A to the START of turn B (first msg in each turn)
     your_response_times = []
@@ -181,7 +163,8 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         prev_turn = turns[i - 1]
         curr_turn = turns[i]
         delta = int(curr_turn["start_ts"] - prev_turn["start_ts"])
-        if delta >= INITIATION_GAP_SECONDS:
+        # Skip gaps > 4 hours (overnight, weekends) for response time
+        if delta >= 4 * 3600:
             continue
         if prev_turn["user"] != user_id and curr_turn["user"] == user_id:
             your_response_times.append(delta)
@@ -340,7 +323,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         prev_turn = turns[i - 1]
         curr_turn = turns[i]
         delta = int(curr_turn["start_ts"] - prev_turn["start_ts"])
-        if delta >= INITIATION_GAP_SECONDS:
+        if delta >= 4 * 3600:
             continue
         if prev_turn["user"] != curr_turn["user"]:
             hour = datetime.fromtimestamp(curr_turn["start_ts"], tz=timezone.utc).astimezone().hour
@@ -399,8 +382,6 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "them_pct": round(len(them_msgs) / total * 100, 1) if total else 0.0,
         "your_avg_words": round(sum(you_words_nonzero) / len(you_words_nonzero), 1),
         "their_avg_words": round(sum(them_words_nonzero) / len(them_words_nonzero), 1),
-        "you_initiated": you_initiated,
-        "them_initiated": them_initiated,
         "your_avg_response_seconds": your_avg_resp,
         "their_avg_response_seconds": their_avg_resp,
         "your_median_response_seconds": your_median_resp,
@@ -504,18 +485,6 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
         them_started = stats.get("threads_started_by_them", 0)
         if you_started > 0 or them_started > 0:
             lines.append(f"  Threads started:  {your_name}: {you_started} / {their_name}: {them_started}")
-
-    # Who initiates
-    total_init = stats["you_initiated"] + stats["them_initiated"]
-    if total_init > 0:
-        lines.append("")
-        lines.append("Who Starts Conversations")
-        lines.append("-" * 50)
-        you_init_pct = stats["you_initiated"] / total_init * 100
-        them_init_pct = stats["them_initiated"] / total_init * 100
-        lines.append(f"  {your_name + ':':<16} {stats['you_initiated']} ({you_init_pct:.0f}%)")
-        lines.append(f"  {their_name + ':':<16} {stats['them_initiated']} ({them_init_pct:.0f}%)")
-        lines.append(f"  ({total_init} conversations, 4hr gap threshold)")
 
     # Response time
     has_resp = stats["your_avg_response_seconds"] > 0 or stats["their_avg_response_seconds"] > 0
