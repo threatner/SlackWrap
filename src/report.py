@@ -67,6 +67,12 @@ def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None 
         median = (sorted_durations[n // 2 - 1] + sorted_durations[n // 2]) // 2
 
     started_by_you = sum(1 for h in user_huddles if h["room"]["created_by"] == user_id)
+    if target_user_id:
+        started_by_them = sum(1 for h in user_huddles if h["room"]["created_by"] == target_user_id)
+        started_by_other = len(user_huddles) - started_by_you - started_by_them
+    else:
+        started_by_them = len(user_huddles) - started_by_you
+        started_by_other = 0
 
     monthly: Counter[str] = Counter()
     weekday: Counter[str] = Counter()
@@ -84,7 +90,8 @@ def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None 
         "median_seconds": median,
         "huddles": user_huddles,
         "started_by_you": started_by_you,
-        "started_by_them": len(user_huddles) - started_by_you,
+        "started_by_them": started_by_them,
+        "started_by_other": started_by_other,
         "monthly_breakdown": dict(sorted(monthly.items())),
         "weekday_breakdown": dict(weekday),
     }

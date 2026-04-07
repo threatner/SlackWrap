@@ -78,8 +78,8 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
     if has_messages and (m_stats["your_avg_response_seconds"] > 0 or m_stats["their_avg_response_seconds"] > 0):
         lines.append("Response Time (Messages)")
         lines.append("-" * 55)
-        lines.append(f"  {your_name + ':':<16} {format_duration(m_stats['your_avg_response_seconds'])} avg reply")
-        lines.append(f"  {their_name + ":":<16} {format_duration(m_stats['their_avg_response_seconds'])} avg reply")
+        lines.append(f"  {your_name + ':':<16} {format_duration(m_stats['your_median_response_seconds'])} median, {format_duration(m_stats['your_avg_response_seconds'])} avg")
+        lines.append(f"  {their_name + ':':<16} {format_duration(m_stats['their_median_response_seconds'])} median, {format_duration(m_stats['their_avg_response_seconds'])} avg")
         lines.append("")
 
     # --- Message Style ---
