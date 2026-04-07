@@ -176,8 +176,7 @@ class TestFetchHuddles:
             "has_more": False,
         }
         with patch("src.slack_client.requests.get", side_effect=[_mock_response(page1), _mock_response(page2)]):
-            with patch("src.slack_client.time.sleep"):
-                huddles = client.fetch_huddles("C12345")
+            huddles = client.fetch_huddles("C12345")
 
         assert len(huddles) == 2
 

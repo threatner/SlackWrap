@@ -3,7 +3,8 @@ import time
 import requests
 
 API_BASE = "https://slack.com/api"
-RATE_LIMIT_DELAY = 1.2  # seconds between paginated requests
+THROTTLE_AFTER = 30  # start throttling after this many requests per minute
+THROTTLE_DELAY = 1.2  # seconds to wait when throttling
 
 
 def _print_status(msg: str):
@@ -22,9 +23,28 @@ class SlackClient:
         self.user_id = user_id
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
+        self._request_timestamps: list[float] = []
+
+    def _throttle_if_needed(self):
+        now = time.time()
+        # Keep only timestamps from the last 60 seconds
+        self._request_timestamps = [t for t in self._request_timestamps if now - t < 60]
+        if len(self._request_timestamps) >= THROTTLE_AFTER:
+            _print_status(f"Throttling... ({len(self._request_timestamps)} requests in last 60s)")
+            time.sleep(THROTTLE_DELAY)
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
+        self._throttle_if_needed()
         resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
+
+        # Handle Slack rate limit response
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", 5))
+            _print_status(f"Rate limited by Slack, waiting {retry_after}s...")
+            time.sleep(retry_after)
+            resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
+
+        self._request_timestamps.append(time.time())
         resp.raise_for_status()
         data = resp.json()
         if not data.get("ok"):
@@ -53,7 +73,6 @@ class SlackClient:
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
                 break
-            time.sleep(RATE_LIMIT_DELAY)
         _clear_status()
         return matches
 
@@ -72,7 +91,6 @@ class SlackClient:
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
                 break
-            time.sleep(RATE_LIMIT_DELAY)
         _clear_status()
         return channels
 
@@ -94,7 +112,6 @@ class SlackClient:
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
                 break
-            time.sleep(RATE_LIMIT_DELAY)
         _clear_status()
         return matches
 
@@ -123,7 +140,6 @@ class SlackClient:
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
                 break
-            time.sleep(RATE_LIMIT_DELAY)
         _clear_status()
         return huddles
 
