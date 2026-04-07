@@ -66,7 +66,7 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         current_month_display = format_month_label(m_stats.get("trend_current_month", ""))
         yoy_label = m_stats.get("trend_yoy_month", "")
         yoy_display = format_month_label(yoy_label) if yoy_label else "prior year"
-        lines.append(f"  {current_month_display + ':':<16} {m_stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {yoy_display})")
+        lines.append(f"  {current_month_display + ':':<16} {m_stats['trend_current_month_count']:,} messages ({pct_yoy_str} daily avg vs {yoy_display})")
         lines.append("")
 
     # --- Thread Activity ---

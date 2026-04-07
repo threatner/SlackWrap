@@ -43,10 +43,7 @@ def generate_html_report(
     monthly_labels = json.dumps(list(m_stats.get("monthly_breakdown", {}).keys())) if has_messages else "[]"
     monthly_data = json.dumps(list(m_stats.get("monthly_breakdown", {}).values())) if has_messages else "[]"
 
-    # Response time by hour chart data
     resp_by_hour = m_stats.get("response_time_by_hour", {}) if has_messages else {}
-    response_by_hour_labels = json.dumps([f"{h:02d}:00" for h in sorted(resp_by_hour.keys())])
-    response_by_hour_data = json.dumps([round(resp_by_hour[h] / 60, 1) for h in sorted(resp_by_hour.keys())])
 
     msg_split_data = json.dumps([m_stats["you_count"], m_stats["them_count"]]) if has_messages else "[]"
     msg_split_labels = json.dumps([your_name, their_name])
@@ -195,7 +192,7 @@ def generate_html_report(
         yoy_display = format_month_label(yoy_label) if yoy_label else "prior year"
         trend_html = f"""
             <div class="stat-row"><span class="label">Last 30 days</span><span class="value">{m_stats['trend_last_30d_count']:,} messages <small>{pct_30d_str} vs prev 30d</small></span></div>
-            <div class="stat-row"><span class="label">{_escape(current_month_display)}</span><span class="value">{m_stats['trend_current_month_count']:,} messages <small>{pct_yoy_str} vs {_escape(yoy_display)}</small></span></div>
+            <div class="stat-row"><span class="label">{_escape(current_month_display)}</span><span class="value">{m_stats['trend_current_month_count']:,} messages <small>{pct_yoy_str} daily avg vs {_escape(yoy_display)}</small></span></div>
         """
         cards.append(_card("Trends", trend_html))
 
@@ -320,12 +317,6 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans
   <canvas id="weekdayChart"></canvas>
 </div>
 
-{"" if not resp_by_hour else f'''
-<div class="chart-card">
-  <h2>Median Response Time by Hour (minutes)</h2>
-  <canvas id="responseByHourChart"></canvas>
-</div>
-'''}
 
 <div class="section-title">Details</div>
 <div class="grid">
@@ -422,29 +413,6 @@ new Chart(document.getElementById('weekdayChart'), {{
     }}
   }}
 }});
-
-{"" if not resp_by_hour else f"""
-const responseByHourLabels = {response_by_hour_labels};
-const responseByHourData = {response_by_hour_data};
-new Chart(document.getElementById('responseByHourChart'), {{
-  type: 'bar',
-  data: {{
-    labels: responseByHourLabels,
-    datasets: [{{
-      label: 'Median Response (min)',
-      data: responseByHourData,
-      backgroundColor: 'rgba(63,185,80,0.6)',
-      borderRadius: 6,
-      borderSkipped: false,
-    }}]
-  }},
-  options: {{
-    responsive: true,
-    plugins: {{ legend: {{ display: false }} }},
-    scales: {{ y: {{ beginAtZero: true, grid: {{ color: '#161b22' }} }}, x: {{ grid: {{ display: false }} }} }}
-  }}
-}});
-"""}
 
 // Emoji rendering via gemoji CDN
 document.addEventListener('DOMContentLoaded', async () => {{

@@ -380,7 +380,16 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     yoy_month = f"{now.year - 1}-{now.strftime('%m')}"
     trend_current_month_count = monthly.get(current_month, 0)
     trend_yoy_count = monthly.get(yoy_month, None)
-    trend_yoy_pct = round((trend_current_month_count - trend_yoy_count) / trend_yoy_count * 100, 1) if trend_yoy_count else None
+    # Normalize YoY to daily rate so partial current month vs full past month is fair
+    days_into_month = now.day
+    if trend_yoy_count and days_into_month > 0:
+        import calendar
+        _, yoy_total_days = calendar.monthrange(now.year - 1, now.month)
+        current_daily_rate = trend_current_month_count / days_into_month
+        yoy_daily_rate = trend_yoy_count / yoy_total_days
+        trend_yoy_pct = round((current_daily_rate - yoy_daily_rate) / yoy_daily_rate * 100, 1) if yoy_daily_rate > 0 else None
+    else:
+        trend_yoy_pct = None
 
     return {
         "total_messages": total,
@@ -479,7 +488,7 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
         current_month_display = format_month_label(stats.get("trend_current_month", ""))
         yoy_label = stats.get("trend_yoy_month", "")
         yoy_display = format_month_label(yoy_label) if yoy_label else "prior year"
-        lines.append(f"  {current_month_display + ':':<16} {stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {yoy_display})")
+        lines.append(f"  {current_month_display + ':':<16} {stats['trend_current_month_count']:,} messages ({pct_yoy_str} daily avg vs {yoy_display})")
 
     # Thread Activity
     if stats.get("top_level_messages") is not None or stats.get("thread_messages"):
