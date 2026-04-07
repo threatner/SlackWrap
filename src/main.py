@@ -234,7 +234,9 @@ def main(argv: list[str] | None = None):
 
     # HTML report
     html_path = generate_html_report(h_stats, m_stats, sources_label, your_name, their_name)
-    print(f"  HTML report saved to: {html_path}")
+    abs_path = os.path.abspath(html_path)
+    file_url = f"file://{abs_path}"
+    print(f"\n  HTML report: {file_url}")
 
 
 if __name__ == "__main__":
