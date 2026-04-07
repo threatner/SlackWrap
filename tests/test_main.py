@@ -1,4 +1,4 @@
-from src.main import build_search_results
+from src.main import build_search_results, parse_args
 
 
 class TestBuildSearchResults:
@@ -33,3 +33,18 @@ class TestBuildSearchResults:
 
         assert len(results) == 1
         assert results[0]["label"] == "John Smith (DM)"
+
+
+class TestParseArgs:
+    def test_default_args(self):
+        args = parse_args([])
+        assert args.no_cache is False
+        assert args.clear_cache is False
+
+    def test_no_cache_flag(self):
+        args = parse_args(["--no-cache"])
+        assert args.no_cache is True
+
+    def test_clear_cache_flag(self):
+        args = parse_args(["--clear-cache"])
+        assert args.clear_cache is True
