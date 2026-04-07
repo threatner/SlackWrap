@@ -30,7 +30,9 @@ class SlackClient:
         # Keep only timestamps from the last 60 seconds
         self._request_timestamps = [t for t in self._request_timestamps if now - t < 60]
         if len(self._request_timestamps) >= THROTTLE_AFTER:
-            _print_status(f"Throttling... ({len(self._request_timestamps)} requests in last 60s)")
+            # Print on its own line so it doesn't hide the current progress
+            _clear_status()
+            print(f"  [throttle] {len(self._request_timestamps)} requests in last 60s, pausing {THROTTLE_DELAY}s...")
             time.sleep(THROTTLE_DELAY)
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
@@ -40,7 +42,8 @@ class SlackClient:
         # Handle Slack rate limit response
         if resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", 5))
-            _print_status(f"Rate limited by Slack, waiting {retry_after}s...")
+            _clear_status()
+            print(f"  [rate-limited] Slack said slow down, waiting {retry_after}s...")
             time.sleep(retry_after)
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
