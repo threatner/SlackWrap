@@ -17,6 +17,11 @@ class CacheManager:
             "text": msg.get("text", ""),
             "subtype": msg.get("subtype"),
         }
+        if msg.get("reactions"):
+            trimmed["reactions"] = [
+                {"name": r.get("name", ""), "users": r.get("users", []), "count": r.get("count", 0)}
+                for r in msg["reactions"]
+            ]
         if "room" in msg:
             room = msg["room"]
             trimmed["room"] = {

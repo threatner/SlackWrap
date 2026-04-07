@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from src.report import format_duration
 
+
 DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 
@@ -88,6 +89,53 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         lines.append("-" * 55)
         lines.append(f"  {your_name + ':':<16} {m_stats['your_avg_words']:.1f} words avg")
         lines.append(f"  {their_name + ":":<16} {m_stats['their_avg_words']:.1f} words avg")
+        lines.append("")
+
+    # --- Conversation Streaks ---
+    if has_messages and m_stats.get("longest_streak_days", 0) > 0:
+        lines.append("Conversation Streaks")
+        lines.append("-" * 55)
+        streak_start_dt = datetime.fromtimestamp(m_stats["longest_streak_start"], tz=timezone.utc).astimezone()
+        streak_end_dt = datetime.fromtimestamp(m_stats["longest_streak_end"], tz=timezone.utc).astimezone()
+        streak_range = f"{streak_start_dt.strftime('%b %-d')} - {streak_end_dt.strftime('%b %-d')}"
+        lines.append(f"  Longest streak:   {m_stats['longest_streak_days']} days ({streak_range})")
+        lines.append(f"  Current streak:   {m_stats['current_streak_days']} days")
+        if m_stats.get("longest_gap_seconds", 0) > 0:
+            gap_days = m_stats["longest_gap_seconds"] // 86400
+            gap_start_dt = datetime.fromtimestamp(m_stats["longest_gap_start"], tz=timezone.utc).astimezone()
+            gap_end_dt = datetime.fromtimestamp(m_stats["longest_gap_end"], tz=timezone.utc).astimezone()
+            gap_range = f"{gap_start_dt.strftime('%b %-d')} - {gap_end_dt.strftime('%b %-d')}"
+            lines.append(f"  Longest silence:  {gap_days} days ({gap_range})")
+        lines.append("")
+
+    # --- First & Last Message ---
+    if has_messages and m_stats.get("first_message") and m_stats.get("last_message"):
+        lines.append("First & Last")
+        lines.append("-" * 55)
+        fm = m_stats["first_message"]
+        lm = m_stats["last_message"]
+        fm_dt = datetime.fromtimestamp(fm["ts"], tz=timezone.utc).astimezone()
+        lm_dt = datetime.fromtimestamp(lm["ts"], tz=timezone.utc).astimezone()
+        lines.append(f"  First message:    {fm_dt.strftime('%Y-%m-%d')}")
+        lines.append(f"                    \"{fm['text']}\"")
+        lines.append(f"  Last message:     {lm_dt.strftime('%Y-%m-%d')}")
+        lines.append(f"                    \"{lm['text']}\"")
+        lines.append("")
+
+    # --- Reactions ---
+    has_reactions = has_messages and (
+        m_stats.get("your_reactions_given", 0) > 0
+        or m_stats.get("their_reactions_given", 0) > 0
+        or m_stats.get("top_reactions")
+    )
+    if has_reactions:
+        lines.append("Reactions")
+        lines.append("-" * 55)
+        lines.append(f"  {your_name + ':':<16} {m_stats['your_reactions_given']:,} reactions given")
+        lines.append(f"  {their_name + ':':<16} {m_stats['their_reactions_given']:,} reactions given")
+        if m_stats.get("top_reactions"):
+            top_str = ", ".join(f"{name} ({count})" for name, count in m_stats["top_reactions"])
+            lines.append(f"  Top reactions:    {top_str}")
         lines.append("")
 
     # --- Frequency (combined) ---

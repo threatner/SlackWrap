@@ -1,6 +1,6 @@
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from src.report import format_duration
 
@@ -98,6 +98,12 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "your_median_response_seconds": 0, "their_median_response_seconds": 0,
             "weekday_breakdown": {}, "hourly_breakdown": {},
             "span_days": 0, "first_ts": 0, "last_ts": 0,
+            "longest_streak_days": 0, "longest_streak_start": 0, "longest_streak_end": 0,
+            "current_streak_days": 0,
+            "longest_gap_seconds": 0, "longest_gap_start": 0, "longest_gap_end": 0,
+            "first_message": None, "last_message": None,
+            "your_reactions_given": 0, "their_reactions_given": 0,
+            "top_reactions": [], "your_top_reactions": [], "their_top_reactions": [],
         }
 
     you_msgs = [m for m in user_msgs if m["user"] == user_id]
@@ -169,6 +175,113 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         last_dt = datetime.fromtimestamp(timestamps[-1], tz=timezone.utc).astimezone()
         span_days = (last_dt - first_dt).days + 1
 
+    # --- Conversation Streaks ---
+    # Build set of active dates from sorted_msgs
+    active_dates = sorted({
+        datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()
+        for m in sorted_msgs
+    })
+
+    longest_streak_days = 0
+    longest_streak_start_ts = 0.0
+    longest_streak_end_ts = 0.0
+    current_streak_days = 0
+
+    if active_dates:
+        # Find longest streak
+        streak_start = active_dates[0]
+        streak_len = 1
+        best_start = active_dates[0]
+        best_len = 1
+
+        for i in range(1, len(active_dates)):
+            if active_dates[i] == active_dates[i - 1] + timedelta(days=1):
+                streak_len += 1
+            else:
+                if streak_len > best_len:
+                    best_len = streak_len
+                    best_start = streak_start
+                streak_start = active_dates[i]
+                streak_len = 1
+        # Check last streak
+        if streak_len > best_len:
+            best_len = streak_len
+            best_start = streak_start
+
+        best_end = best_start + timedelta(days=best_len - 1)
+        longest_streak_days = best_len
+        longest_streak_start_ts = float(
+            datetime(best_start.year, best_start.month, best_start.day, tzinfo=timezone.utc).timestamp()
+        )
+        longest_streak_end_ts = float(
+            datetime(best_end.year, best_end.month, best_end.day, tzinfo=timezone.utc).timestamp()
+        )
+
+        # Current streak (from the last active date going backwards)
+        last_active = active_dates[-1]
+        cur_len = 1
+        for i in range(len(active_dates) - 2, -1, -1):
+            if active_dates[i] == active_dates[i + 1] - timedelta(days=1):
+                cur_len += 1
+            else:
+                break
+        current_streak_days = cur_len
+
+    # --- Dead Zones (longest gap between consecutive messages) ---
+    longest_gap_seconds = 0
+    longest_gap_start_ts = 0.0
+    longest_gap_end_ts = 0.0
+
+    if len(timestamps) >= 2:
+        for i in range(1, len(timestamps)):
+            gap = int(timestamps[i] - timestamps[i - 1])
+            if gap > longest_gap_seconds:
+                longest_gap_seconds = gap
+                longest_gap_start_ts = timestamps[i - 1]
+                longest_gap_end_ts = timestamps[i]
+
+    # --- First & Last Message ---
+    def _trim_msg(m: dict) -> dict:
+        return {
+            "user": m.get("user", ""),
+            "text": (m.get("text") or "")[:100],
+            "ts": float(m["ts"]),
+        }
+
+    first_message = _trim_msg(sorted_msgs[0])
+    last_message = _trim_msg(sorted_msgs[-1])
+
+    # --- Emoji / Reaction Analytics ---
+    # Operate on ALL messages passed in (before subtype filtering)
+    your_reactions_given = 0
+    their_reactions_given = 0
+    all_reaction_counter: Counter[str] = Counter()
+    your_reaction_counter: Counter[str] = Counter()
+    their_reaction_counter: Counter[str] = Counter()
+
+    for m in messages:
+        for reaction in m.get("reactions", []):
+            name = reaction.get("name", "")
+            users_who_reacted = reaction.get("users", [])
+            for uid in users_who_reacted:
+                if uid == user_id:
+                    your_reactions_given += 1
+                    your_reaction_counter[name] += 1
+                    all_reaction_counter[name] += 1
+                elif target_user_id and uid == target_user_id:
+                    their_reactions_given += 1
+                    their_reaction_counter[name] += 1
+                    all_reaction_counter[name] += 1
+                elif not target_user_id:
+                    # No target filter — count all non-you reactions as "theirs"
+                    their_reactions_given += 1
+                    their_reaction_counter[name] += 1
+                    all_reaction_counter[name] += 1
+
+    top_reactions = all_reaction_counter.most_common(5)
+    your_top_reactions = your_reaction_counter.most_common(3)
+    their_top_reactions = their_reaction_counter.most_common(3)
+
     return {
         "total_messages": total,
         "you_count": len(you_msgs),
@@ -188,6 +301,20 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "span_days": span_days,
         "first_ts": timestamps[0] if timestamps else 0,
         "last_ts": timestamps[-1] if timestamps else 0,
+        "longest_streak_days": longest_streak_days,
+        "longest_streak_start": longest_streak_start_ts,
+        "longest_streak_end": longest_streak_end_ts,
+        "current_streak_days": current_streak_days,
+        "longest_gap_seconds": longest_gap_seconds,
+        "longest_gap_start": longest_gap_start_ts,
+        "longest_gap_end": longest_gap_end_ts,
+        "first_message": first_message,
+        "last_message": last_message,
+        "your_reactions_given": your_reactions_given,
+        "their_reactions_given": their_reactions_given,
+        "top_reactions": top_reactions,
+        "your_top_reactions": your_top_reactions,
+        "their_top_reactions": their_top_reactions,
     }
 
 
@@ -244,6 +371,55 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
     lines.append("-" * 50)
     lines.append(f"  {your_name + ':':<16} {stats['your_avg_words']:.1f} words avg")
     lines.append(f"  {their_name + ':':<16} {stats['their_avg_words']:.1f} words avg")
+
+    # Conversation Streaks
+    if stats.get("longest_streak_days", 0) > 0:
+        lines.append("")
+        lines.append("Conversation Streaks")
+        lines.append("-" * 50)
+        streak_start_dt = datetime.fromtimestamp(stats["longest_streak_start"], tz=timezone.utc).astimezone()
+        streak_end_dt = datetime.fromtimestamp(stats["longest_streak_end"], tz=timezone.utc).astimezone()
+        streak_range = f"{streak_start_dt.strftime('%b %-d')} - {streak_end_dt.strftime('%b %-d')}"
+        lines.append(f"  Longest streak:   {stats['longest_streak_days']} days ({streak_range})")
+        lines.append(f"  Current streak:   {stats['current_streak_days']} days")
+        if stats.get("longest_gap_seconds", 0) > 0:
+            gap_days = stats["longest_gap_seconds"] // 86400
+            gap_start_dt = datetime.fromtimestamp(stats["longest_gap_start"], tz=timezone.utc).astimezone()
+            gap_end_dt = datetime.fromtimestamp(stats["longest_gap_end"], tz=timezone.utc).astimezone()
+            gap_range = f"{gap_start_dt.strftime('%b %-d')} - {gap_end_dt.strftime('%b %-d')}"
+            lines.append(f"  Longest silence:  {gap_days} days ({gap_range})")
+
+    # First & Last Message
+    if stats.get("first_message") and stats.get("last_message"):
+        lines.append("")
+        lines.append("First & Last")
+        lines.append("-" * 50)
+        fm = stats["first_message"]
+        lm = stats["last_message"]
+        fm_name = your_name if fm["user"] == stats.get("_user_id") else their_name
+        lm_name = your_name if lm["user"] == stats.get("_user_id") else their_name
+        fm_dt = datetime.fromtimestamp(fm["ts"], tz=timezone.utc).astimezone()
+        lm_dt = datetime.fromtimestamp(lm["ts"], tz=timezone.utc).astimezone()
+        lines.append(f"  First message:    {fm_dt.strftime('%Y-%m-%d')} by {fm_name}")
+        lines.append(f"                    \"{fm['text']}\"")
+        lines.append(f"  Last message:     {lm_dt.strftime('%Y-%m-%d')} by {lm_name}")
+        lines.append(f"                    \"{lm['text']}\"")
+
+    # Reactions
+    has_reactions = (
+        stats.get("your_reactions_given", 0) > 0
+        or stats.get("their_reactions_given", 0) > 0
+        or stats.get("top_reactions")
+    )
+    if has_reactions:
+        lines.append("")
+        lines.append("Reactions")
+        lines.append("-" * 50)
+        lines.append(f"  {your_name + ':':<16} {stats['your_reactions_given']:,} reactions given")
+        lines.append(f"  {their_name + ':':<16} {stats['their_reactions_given']:,} reactions given")
+        if stats.get("top_reactions"):
+            top_str = ", ".join(f"{name} ({count})" for name, count in stats["top_reactions"])
+            lines.append(f"  Top reactions:    {top_str}")
 
     # Hourly breakdown - top 5 hours
     hourly = stats.get("hourly_breakdown", {})
