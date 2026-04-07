@@ -84,3 +84,99 @@ class TestSearchChannels:
         assert len(results) == 2
         assert results[0]["id"] == "C001"
         assert results[1]["id"] == "C003"
+
+
+class TestFetchHuddles:
+    def test_extracts_huddle_thread_messages(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        history_response = {
+            "ok": True,
+            "messages": [
+                {"type": "message", "text": "hello"},
+                {
+                    "type": "message",
+                    "subtype": "huddle_thread",
+                    "room": {
+                        "date_start": 1700000000,
+                        "date_end": 1700003600,
+                        "has_ended": True,
+                        "participant_history": ["U_ME", "U001"],
+                        "created_by": "U_ME",
+                    },
+                },
+                {"type": "message", "text": "world"},
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(history_response)):
+            huddles = client.fetch_huddles("C12345")
+
+        assert len(huddles) == 1
+        assert huddles[0]["room"]["date_start"] == 1700000000
+
+    def test_skips_ongoing_huddles(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        history_response = {
+            "ok": True,
+            "messages": [
+                {
+                    "type": "message",
+                    "subtype": "huddle_thread",
+                    "room": {
+                        "date_start": 1700000000,
+                        "date_end": 0,
+                        "has_ended": False,
+                        "participant_history": ["U_ME", "U001"],
+                        "created_by": "U_ME",
+                    },
+                },
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(history_response)):
+            huddles = client.fetch_huddles("C12345")
+
+        assert len(huddles) == 0
+
+    def test_paginates_through_history(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        page1 = {
+            "ok": True,
+            "messages": [
+                {
+                    "type": "message",
+                    "subtype": "huddle_thread",
+                    "room": {
+                        "date_start": 1700000000,
+                        "date_end": 1700003600,
+                        "has_ended": True,
+                        "participant_history": ["U_ME", "U001"],
+                        "created_by": "U_ME",
+                    },
+                },
+            ],
+            "has_more": True,
+            "response_metadata": {"next_cursor": "cursor_abc"},
+        }
+        page2 = {
+            "ok": True,
+            "messages": [
+                {
+                    "type": "message",
+                    "subtype": "huddle_thread",
+                    "room": {
+                        "date_start": 1700010000,
+                        "date_end": 1700011800,
+                        "has_ended": True,
+                        "participant_history": ["U_ME", "U001"],
+                        "created_by": "U001",
+                    },
+                },
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", side_effect=[_mock_response(page1), _mock_response(page2)]):
+            with patch("src.slack_client.time.sleep"):
+                huddles = client.fetch_huddles("C12345")
+
+        assert len(huddles) == 2

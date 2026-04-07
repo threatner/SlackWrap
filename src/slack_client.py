@@ -74,3 +74,26 @@ class SlackClient:
                 break
             time.sleep(RATE_LIMIT_DELAY)
         return matches
+
+    def fetch_huddles(self, channel_id: str) -> list[dict]:
+        huddles = []
+        cursor = ""
+        while True:
+            params = {"channel": channel_id, "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.history", params)
+            for msg in data.get("messages", []):
+                if msg.get("subtype") != "huddle_thread":
+                    continue
+                room = msg.get("room", {})
+                if not room.get("has_ended"):
+                    continue
+                huddles.append(msg)
+            if not data.get("has_more"):
+                break
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+            time.sleep(RATE_LIMIT_DELAY)
+        return huddles
