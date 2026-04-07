@@ -7,14 +7,51 @@ THROTTLE_AFTER = 30  # start throttling after this many requests per minute
 THROTTLE_DELAY = 1.2  # seconds to wait when throttling
 
 
+class _StatusDisplay:
+    """Manages two in-place lines: progress (line 1) and throttle (line 2)."""
+
+    def __init__(self):
+        self._active = False
+        self._progress = ""
+        self._throttle = ""
+
+    def _render(self):
+        if not self._active:
+            # First render: print both lines
+            sys.stderr.write(f"  {self._progress}\n  {self._throttle}")
+            self._active = True
+        else:
+            # Move up 1 line, clear, write progress, move down, clear, write throttle
+            sys.stderr.write(f"\033[A\r\033[K  {self._progress}\n\r\033[K  {self._throttle}")
+        sys.stderr.flush()
+
+    def update_progress(self, msg: str):
+        self._progress = msg
+        self._render()
+
+    def update_throttle(self, msg: str):
+        self._throttle = msg
+        self._render()
+
+    def clear(self):
+        if self._active:
+            # Clear both lines
+            sys.stderr.write(f"\033[A\r\033[K\r\033[K")
+            sys.stderr.flush()
+            self._active = False
+            self._progress = ""
+            self._throttle = ""
+
+
+_display = _StatusDisplay()
+
+
 def _print_status(msg: str):
-    sys.stderr.write(f"\r\033[K  {msg}")
-    sys.stderr.flush()
+    _display.update_progress(msg)
 
 
 def _clear_status():
-    sys.stderr.write("\r\033[K")
-    sys.stderr.flush()
+    _display.clear()
 
 
 class SlackClient:
@@ -27,23 +64,23 @@ class SlackClient:
 
     def _throttle_if_needed(self):
         now = time.time()
-        # Keep only timestamps from the last 60 seconds
         self._request_timestamps = [t for t in self._request_timestamps if now - t < 60]
-        if len(self._request_timestamps) >= THROTTLE_AFTER:
-            # Print on its own line so it doesn't hide the current progress
-            _clear_status()
-            print(f"  [throttle] {len(self._request_timestamps)} requests in last 60s, pausing {THROTTLE_DELAY}s...")
+        req_count = len(self._request_timestamps)
+        if req_count >= THROTTLE_AFTER:
+            _display.update_throttle(f"[throttle] {req_count} req/60s — pausing {THROTTLE_DELAY}s")
             time.sleep(THROTTLE_DELAY)
+        elif req_count > 0:
+            _display.update_throttle(f"[requests] {req_count}/{THROTTLE_AFTER} in last 60s")
+        else:
+            _display.update_throttle("")
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
         self._throttle_if_needed()
         resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
-        # Handle Slack rate limit response
         if resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", 5))
-            _clear_status()
-            print(f"  [rate-limited] Slack said slow down, waiting {retry_after}s...")
+            _display.update_throttle(f"[rate-limited] Slack said wait {retry_after}s...")
             time.sleep(retry_after)
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
