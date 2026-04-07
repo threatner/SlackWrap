@@ -74,12 +74,16 @@ class SlackClient:
         self._user_cache: dict[str, str] = {}
         self._own_first_name: str | None = None
         self._endpoint_timestamps: dict[str, list[float]] = {}
+        self.team = None
+        self.username = None
         # Auto-detect user_id from token if not provided
         if user_id:
             self.user_id = user_id
         else:
             data = self._get("auth.test")
             self.user_id = data["user_id"]
+            self.username = data.get("user", "")
+            self.team = data.get("team", "")
 
     def _get_endpoint_count(self, endpoint: str) -> int:
         now = time.time()

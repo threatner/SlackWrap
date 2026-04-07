@@ -135,11 +135,12 @@ def main(argv: list[str] | None = None):
 
     client = SlackClient(token=token)
     user_id = client.user_id
+    print(f"\n  Logged in as {client.username} @ {client.team}")
     cache = CacheManager()
 
     if args.clear_cache:
         cache.clear_all()
-        print("Cache cleared.")
+        print("  Cache cleared.")
 
     query = input("\nSearch for a person or channel: ").strip()
     if not query:
