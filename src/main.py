@@ -61,11 +61,14 @@ def fetch_with_cache(
     if cached is not None:
         last_ts = cached["last_ts"]
         print(f"{prefix}Cache: {len(cached['messages']):,} msgs, fetching new...")
+
+        # Fetch new top-level messages + their threads
         new_raw = client.fetch_messages(channel_id, oldest=last_ts, include_threads=True)
         existing_ts = {m["ts"] for m in cached["messages"]}
         new_msgs = [CacheManager.trim_message(m) for m in new_raw if m.get("ts") not in existing_ts]
         if new_msgs:
-            cache.append(channel_id, new_msgs, last_ts=new_msgs[0]["ts"])
+            latest_new_ts = max(m["ts"] for m in new_msgs)
+            cache.append(channel_id, new_msgs, last_ts=latest_new_ts)
             print(f"{prefix}+{len(new_msgs):,} new messages")
         else:
             print(f"{prefix}Up to date")

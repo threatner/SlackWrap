@@ -106,16 +106,17 @@ class SlackClient:
         count = self._get_endpoint_count(endpoint)
 
         if count >= max_req:
-            # Calculate exact wait: when will the oldest request in window expire?
-            oldest_ts = self._endpoint_timestamps[endpoint][0]
-            wait = 60.0 - (time.time() - oldest_ts) + 0.1  # +0.1s buffer
-            if wait > 0:
-                _display.update_throttle(
-                    f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s for window to free up"
-                )
-                time.sleep(wait)
-                # After waiting, clean up expired timestamps
-                self._get_endpoint_count(endpoint)
+            timestamps = self._endpoint_timestamps.get(endpoint, [])
+            if timestamps:
+                oldest_ts = timestamps[0]
+                wait = 60.0 - (time.time() - oldest_ts) + 0.1
+                if wait > 0:
+                    _display.update_throttle(
+                        f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s for window to free up"
+                    )
+                    time.sleep(wait)
+            # Always clean up after potential wait
+            self._get_endpoint_count(endpoint)
         else:
             _display.update_throttle(f"[{tier_info['label']}] {count}/{max_req} req/min")
 
@@ -128,8 +129,8 @@ class SlackClient:
             retry_after = int(resp.headers.get("Retry-After", 5))
             _display.update_throttle(f"[rate-limited] Slack said wait {retry_after}s...")
             time.sleep(retry_after)
-            # Clean up old timestamps after waiting
             self._get_endpoint_count(endpoint)
+            self._throttle_if_needed(endpoint)
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
         # Record this request
@@ -215,7 +216,7 @@ class SlackClient:
         replies = []
         cursor = ""
         while True:
-            params = {"channel": channel_id, "ts": thread_ts, "limit": 200}
+            params = {"channel": channel_id, "ts": thread_ts, "limit": 999}
             if cursor:
                 params["cursor"] = cursor
             data = self._get("conversations.replies", params)
