@@ -147,7 +147,11 @@ class SlackClient:
                     continue
                 name = member.get("real_name", "").lower()
                 username = member.get("name", "").lower()
-                if query_lower in name or query_lower in username:
+                profile = member.get("profile", {})
+                display_name = profile.get("display_name", "").lower()
+                first_name = profile.get("first_name", "").lower()
+                last_name = profile.get("last_name", "").lower()
+                if query_lower in name or query_lower in username or query_lower in display_name or query_lower in first_name or query_lower in last_name:
                     matches.append(member)
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
