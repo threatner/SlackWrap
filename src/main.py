@@ -37,7 +37,7 @@ def build_search_results(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Slack Huddle & Message Analytics")
+    parser = argparse.ArgumentParser(description="SlackWrap — Your Slack year in review")
     parser.add_argument("--no-cache", action="store_true", help="Skip cache, fetch everything fresh (don't save)")
     parser.add_argument("--clear-cache", action="store_true", help="Clear all cached data before running")
     return parser.parse_args(argv)

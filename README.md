@@ -1,6 +1,6 @@
-# Huddle
+# SlackWrap
 
-A Slack analytics CLI that shows how much time you spend in huddles and how you communicate with a colleague, with rich console output and an interactive HTML dashboard.
+Your Slack year in review. A CLI tool that analyzes your Slack huddles and messages with a colleague — like Spotify Wrapped, but for your work conversations. Rich console output and an interactive HTML dashboard.
 
 ## Features
 

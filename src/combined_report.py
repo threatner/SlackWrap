@@ -7,11 +7,11 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
     has_messages = m_stats["total_messages"] > 0
 
     if not has_huddles and not has_messages:
-        return f"\nSlack Analytics\n===============\nChannel: {channel_label}\n\nNo data found.\n"
+        return f"\nSlackWrap\n===============\nChannel: {channel_label}\n\nNo data found.\n"
 
     lines = []
     lines.append("")
-    lines.append("Slack Analytics")
+    lines.append("SlackWrap")
     lines.append("=" * 55)
     lines.append(f"Channel:  {channel_label}")
 
