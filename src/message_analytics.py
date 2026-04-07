@@ -509,13 +509,13 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
     total_init = stats["you_initiated"] + stats["them_initiated"]
     if total_init > 0:
         lines.append("")
-        lines.append("Who Initiates")
+        lines.append("Who Starts Conversations")
         lines.append("-" * 50)
         you_init_pct = stats["you_initiated"] / total_init * 100
         them_init_pct = stats["them_initiated"] / total_init * 100
         lines.append(f"  {your_name + ':':<16} {stats['you_initiated']} ({you_init_pct:.0f}%)")
         lines.append(f"  {their_name + ':':<16} {stats['them_initiated']} ({them_init_pct:.0f}%)")
-        lines.append(f"  (gap threshold: 4 hours)")
+        lines.append(f"  ({total_init} conversations, 4hr gap threshold)")
 
     # Response time
     has_resp = stats["your_avg_response_seconds"] > 0 or stats["their_avg_response_seconds"] > 0

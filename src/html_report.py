@@ -78,7 +78,8 @@ def generate_html_report(
         if m_init_total > 0:
             m_you_pct = m_stats["you_initiated"] / m_init_total * 100
             m_them_pct = m_stats["them_initiated"] / m_init_total * 100
-            init_rows += f'<div class="stat-row"><span class="label">Messages</span><span class="value">{your_name}: {m_stats["you_initiated"]} ({m_you_pct:.0f}%) &middot; {their_name}: {m_stats["them_initiated"]} ({m_them_pct:.0f}%)</span></div>'
+            init_rows += f'<div class="stat-row"><span class="label">Convos</span><span class="value">{your_name}: {m_stats["you_initiated"]} ({m_you_pct:.0f}%) &middot; {their_name}: {m_stats["them_initiated"]} ({m_them_pct:.0f}%)</span></div>'
+            init_rows += f'<div class="stat-row"><span class="label"></span><span class="value"><small>{m_init_total} conversations, 4hr gap</small></span></div>'
     if init_rows:
         cards.append(_card("Who Initiates", init_rows))
 

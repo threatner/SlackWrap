@@ -100,7 +100,8 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         if m_init_total > 0:
             m_you_pct = m_stats["you_initiated"] / m_init_total * 100
             m_them_pct = m_stats["them_initiated"] / m_init_total * 100
-            lines.append(f"  Messages   {your_name}: {m_stats['you_initiated']} ({m_you_pct:.0f}%)     {their_name}: {m_stats['them_initiated']} ({m_them_pct:.0f}%)")
+            lines.append(f"  Convos     {your_name}: {m_stats['you_initiated']} ({m_you_pct:.0f}%)     {their_name}: {m_stats['them_initiated']} ({m_them_pct:.0f}%)")
+            lines.append(f"             ({m_init_total} conversations, 4hr gap threshold)")
     lines.append("")
 
     # --- Response Time ---

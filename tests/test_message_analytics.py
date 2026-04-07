@@ -221,7 +221,7 @@ class TestFormatMessageReport:
         assert "Message Analytics" in output
         assert "DM with Alice" in output
         assert "Total messages:" in output
-        assert "Who Initiates" in output
+        assert "Who Starts Conversations" in output
         assert "Response Time" in output
         assert "median" in output
         assert "avg" in output
