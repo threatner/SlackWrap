@@ -228,48 +228,44 @@ class TestFetchMessages:
 
 
 class TestResolveUserName:
-    def test_returns_display_name(self):
+    def test_prefers_display_name(self):
         client = SlackClient(token="xoxp-fake", user_id="U_ME")
         user_response = {
             "ok": True,
-            "user": {"id": "U001", "real_name": "John Smith"},
+            "user": {"id": "U001", "real_name": "John Smith", "profile": {"display_name": "Johnny"}},
         }
         with patch("src.slack_client.requests.get", return_value=_mock_response(user_response)):
             name = client.resolve_user_name("U001")
+        assert name == "Johnny"
 
+    def test_falls_back_to_real_name(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        user_response = {
+            "ok": True,
+            "user": {"id": "U001", "real_name": "John Smith", "profile": {"display_name": ""}},
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(user_response)):
+            name = client.resolve_user_name("U001")
         assert name == "John Smith"
 
     def test_caches_results(self):
         client = SlackClient(token="xoxp-fake", user_id="U_ME")
         user_response = {
             "ok": True,
-            "user": {"id": "U001", "real_name": "John Smith"},
+            "user": {"id": "U001", "real_name": "John Smith", "profile": {"display_name": ""}},
         }
         mock_get = MagicMock(return_value=_mock_response(user_response))
         with patch("src.slack_client.requests.get", mock_get):
             client.resolve_user_name("U001")
             client.resolve_user_name("U001")
-
         assert mock_get.call_count == 1
 
-    def test_returns_first_name_for_own_user_id(self):
+    def test_resolves_own_name_same_as_others(self):
         client = SlackClient(token="xoxp-fake", user_id="U_ME")
         user_response = {
             "ok": True,
-            "user": {"id": "U_ME", "real_name": "Rahul Kumar"},
+            "user": {"id": "U_ME", "real_name": "Rahul Kumar", "profile": {"display_name": "Rahul"}},
         }
         with patch("src.slack_client.requests.get", return_value=_mock_response(user_response)):
             name = client.resolve_user_name("U_ME")
         assert name == "Rahul"
-
-    def test_caches_own_name(self):
-        client = SlackClient(token="xoxp-fake", user_id="U_ME")
-        user_response = {
-            "ok": True,
-            "user": {"id": "U_ME", "real_name": "Rahul Kumar"},
-        }
-        mock_get = MagicMock(return_value=_mock_response(user_response))
-        with patch("src.slack_client.requests.get", mock_get):
-            client.resolve_user_name("U_ME")
-            client.resolve_user_name("U_ME")
-        assert mock_get.call_count == 1

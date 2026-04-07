@@ -72,7 +72,6 @@ class SlackClient:
         self.token = token
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
-        self._own_first_name: str | None = None
         self._endpoint_timestamps: dict[str, list[float]] = {}
         self.team = None
         self.username = None
@@ -283,16 +282,19 @@ class SlackClient:
         _clear_status()
         return shared
 
+    def _extract_display_name(self, user_data: dict) -> str:
+        profile = user_data.get("profile", {})
+        return (
+            profile.get("display_name")
+            or user_data.get("real_name")
+            or user_data.get("name")
+            or user_data.get("id", "Unknown")
+        )
+
     def resolve_user_name(self, user_id: str) -> str:
-        if user_id == self.user_id:
-            if self._own_first_name is None:
-                data = self._get("users.info", {"user": user_id})
-                full_name = data.get("user", {}).get("real_name", user_id)
-                self._own_first_name = full_name.split()[0] if full_name else user_id
-            return self._own_first_name
         if user_id in self._user_cache:
             return self._user_cache[user_id]
         data = self._get("users.info", {"user": user_id})
-        name = data.get("user", {}).get("real_name", user_id)
+        name = self._extract_display_name(data.get("user", {}))
         self._user_cache[user_id] = name
         return name
