@@ -31,11 +31,16 @@ def extract_huddles(messages: list[dict]) -> list[dict]:
     return huddles
 
 
-def compute_stats(huddles: list[dict], user_id: str) -> dict:
+def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None = None) -> dict:
     user_huddles = [
         h for h in huddles
         if user_id in h["room"]["participant_history"]
     ]
+    if target_user_id:
+        user_huddles = [
+            h for h in user_huddles
+            if target_user_id in h["room"]["participant_history"]
+        ]
     if not user_huddles:
         return {
             "total_huddles": 0,

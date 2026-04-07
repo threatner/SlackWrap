@@ -19,9 +19,19 @@ def build_search_results(
     for user in users:
         dm_id = dm_by_user.get(user["id"])
         if dm_id:
-            results.append({"channel_id": dm_id, "label": f"{user['real_name']} (DM)"})
+            results.append({
+                "channel_id": dm_id,
+                "label": f"{user['real_name']} (DM)",
+                "type": "dm",
+                "target_user_id": user["id"],
+                "target_name": user["real_name"],
+            })
     for ch in channels:
-        results.append({"channel_id": ch["id"], "label": f"#{ch['name']} (channel)"})
+        results.append({
+            "channel_id": ch["id"],
+            "label": f"#{ch['name']} (channel)",
+            "type": "channel",
+        })
     return results
 
 
@@ -37,39 +47,72 @@ def fetch_with_cache(
     cache: CacheManager,
     channel_id: str,
     use_cache: bool,
+    label: str = "",
 ) -> list[dict]:
+    prefix = f"  [{label}] " if label else "  "
+
     if not use_cache:
-        print("  (cache disabled)")
+        print(f"{prefix}(cache disabled)")
         raw = client.fetch_messages(channel_id)
         return [CacheManager.trim_message(m) for m in raw]
 
     cached = cache.load(channel_id)
     if cached is not None:
         last_ts = cached["last_ts"]
-        print(f"  Cache found: {len(cached['messages']):,} messages up to {last_ts}")
-        print("  Fetching new messages...")
+        print(f"{prefix}Cache: {len(cached['messages']):,} msgs, fetching new...")
         new_raw = client.fetch_messages(channel_id, oldest=last_ts)
-        # conversations.history with oldest returns messages with ts > oldest,
-        # but may include the boundary message. Deduplicate by ts.
         existing_ts = {m["ts"] for m in cached["messages"]}
         new_msgs = [CacheManager.trim_message(m) for m in new_raw if m.get("ts") not in existing_ts]
         if new_msgs:
             cache.append(channel_id, new_msgs, last_ts=new_msgs[0]["ts"])
-            print(f"  Added {len(new_msgs):,} new messages to cache")
+            print(f"{prefix}+{len(new_msgs):,} new messages")
         else:
-            print("  Cache is up to date")
+            print(f"{prefix}Up to date")
         updated = cache.load(channel_id)
         return updated["messages"]
     else:
-        print("  No cache found, fetching all messages (this may take a while)...")
+        print(f"{prefix}No cache, fetching all...")
         raw = client.fetch_messages(channel_id)
         trimmed = [CacheManager.trim_message(m) for m in raw]
         if trimmed:
-            # conversations.history returns newest first, so first element has highest ts
             latest_ts = trimmed[0]["ts"]
             cache.save(channel_id, trimmed, last_ts=latest_ts)
-            print(f"  Cached {len(trimmed):,} messages")
+            print(f"{prefix}Cached {len(trimmed):,} messages")
         return trimmed
+
+
+def select_shared_channels(client: SlackClient, target_user_id: str, target_name: str) -> list[dict]:
+    print(f"\nFinding channels shared with {target_name}...")
+    shared = client.find_shared_channels(target_user_id)
+
+    if not shared:
+        print("  No shared channels found.")
+        return []
+
+    print(f"\n  Found {len(shared)} shared channels:")
+    for i, ch in enumerate(shared, 1):
+        print(f"    {i}. #{ch['name']}")
+    print(f"    a. All")
+    print(f"    n. None (DM only)")
+    print()
+
+    choice = input("  Select (comma-separated numbers, 'a' for all, 'n' for none): ").strip().lower()
+
+    if choice == "n" or choice == "":
+        return []
+    if choice == "a":
+        return shared
+
+    selected = []
+    for part in choice.split(","):
+        part = part.strip()
+        try:
+            idx = int(part) - 1
+            if 0 <= idx < len(shared):
+                selected.append(shared[idx])
+        except ValueError:
+            continue
+    return selected
 
 
 def main(argv: list[str] | None = None):
@@ -130,31 +173,52 @@ def main(argv: list[str] | None = None):
         sys.exit(1)
 
     selected = results[idx]
+    is_dm = selected.get("type") == "dm"
+    target_user_id = selected.get("target_user_id")
+    target_name = selected.get("target_name", "")
+
+    # For DM selections, offer shared channel inclusion
+    extra_channels = []
+    if is_dm:
+        extra_channels = select_shared_channels(client, target_user_id, target_name)
 
     # Analytics type selection
-    print(f"\nWhat would you like to analyze for {selected['label']}?")
+    label = selected["label"]
+    print(f"\nWhat would you like to analyze for {label}?")
     print("  1. Huddle Time")
     print("  2. Message Analytics")
     print("  3. Both")
     print()
     analytics_choice = input("Select [1-3]: ").strip()
 
-    print(f"\nFetching data from {selected['label']}...")
+    # Fetch data from DM
     use_cache = not args.no_cache
-    messages = fetch_with_cache(client, cache, selected["channel_id"], use_cache)
+    print(f"\nFetching data...")
+    all_messages = fetch_with_cache(client, cache, selected["channel_id"], use_cache, label="DM")
+
+    # Fetch data from selected shared channels
+    for ch in extra_channels:
+        ch_label = f"#{ch['name']}"
+        ch_messages = fetch_with_cache(client, cache, ch["id"], use_cache, label=ch_label)
+        all_messages.extend(ch_messages)
+
+    sources_label = label
+    if extra_channels:
+        ch_names = ", ".join(f"#{ch['name']}" for ch in extra_channels)
+        sources_label = f"{label} + {ch_names}"
 
     if analytics_choice == "2":
-        stats = compute_message_stats(messages, user_id)
-        print(format_message_report(stats, selected["label"]))
+        stats = compute_message_stats(all_messages, user_id, target_user_id if extra_channels else None)
+        print(format_message_report(stats, sources_label))
     elif analytics_choice == "3":
-        huddles = extract_huddles(messages)
-        h_stats = compute_stats(huddles, user_id)
-        m_stats = compute_message_stats(messages, user_id)
-        print(format_combined_report(h_stats, m_stats, selected["label"]))
+        huddles = extract_huddles(all_messages)
+        h_stats = compute_stats(huddles, user_id, target_user_id if extra_channels else None)
+        m_stats = compute_message_stats(all_messages, user_id, target_user_id if extra_channels else None)
+        print(format_combined_report(h_stats, m_stats, sources_label))
     else:
-        huddles = extract_huddles(messages)
-        stats = compute_stats(huddles, user_id)
-        print(format_report(stats, selected["label"], client.resolve_user_name))
+        huddles = extract_huddles(all_messages)
+        stats = compute_stats(huddles, user_id, target_user_id if extra_channels else None)
+        print(format_report(stats, sources_label, client.resolve_user_name))
 
 
 if __name__ == "__main__":

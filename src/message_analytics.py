@@ -25,8 +25,10 @@ def _filter_user_messages(messages: list[dict]) -> list[dict]:
     ]
 
 
-def compute_message_stats(messages: list[dict], user_id: str) -> dict:
+def compute_message_stats(messages: list[dict], user_id: str, target_user_id: str | None = None) -> dict:
     user_msgs = _filter_user_messages(messages)
+    if target_user_id:
+        user_msgs = [m for m in user_msgs if m["user"] in (user_id, target_user_id)]
 
     if not user_msgs:
         return {

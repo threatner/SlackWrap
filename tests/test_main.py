@@ -17,8 +17,13 @@ class TestBuildSearchResults:
         results = build_search_results(users, dm_channels, channels)
 
         assert len(results) == 2
-        assert results[0] == {"channel_id": "D001", "label": "John Smith (DM)"}
-        assert results[1] == {"channel_id": "C001", "label": "#john-project (channel)"}
+        assert results[0]["channel_id"] == "D001"
+        assert results[0]["label"] == "John Smith (DM)"
+        assert results[0]["type"] == "dm"
+        assert results[0]["target_user_id"] == "U001"
+        assert results[1]["channel_id"] == "C001"
+        assert results[1]["label"] == "#john-project (channel)"
+        assert results[1]["type"] == "channel"
 
     def test_skips_users_without_dm(self):
         users = [

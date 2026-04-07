@@ -18,6 +18,7 @@ ENDPOINT_TIERS = {
     "users.info": 4,
     "conversations.list": 2,
     "conversations.history": 3,
+    "conversations.members": 4,
 }
 
 
@@ -225,6 +226,48 @@ class SlackClient:
                 continue
             huddles.append(msg)
         return huddles
+
+    def list_all_channels(self) -> list[dict]:
+        channels = []
+        cursor = ""
+        page = 0
+        while True:
+            page += 1
+            _print_status(f"Loading channels... (page {page}, {len(channels)} loaded)")
+            params = {"types": "public_channel,private_channel", "limit": 200, "exclude_archived": "true"}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.list", params)
+            channels.extend(data.get("channels", []))
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        _clear_status()
+        return channels
+
+    def check_channel_membership(self, channel_id: str, target_user_id: str) -> bool:
+        cursor = ""
+        while True:
+            params = {"channel": channel_id, "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.members", params)
+            if target_user_id in data.get("members", []):
+                return True
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        return False
+
+    def find_shared_channels(self, target_user_id: str) -> list[dict]:
+        all_channels = self.list_all_channels()
+        shared = []
+        for i, ch in enumerate(all_channels):
+            _print_status(f"Checking shared channels... ({i + 1}/{len(all_channels)}, {len(shared)} shared)")
+            if self.check_channel_membership(ch["id"], target_user_id):
+                shared.append(ch)
+        _clear_status()
+        return shared
 
     def resolve_user_name(self, user_id: str) -> str:
         if user_id == self.user_id:
