@@ -227,3 +227,19 @@ class TestFormatMessageReport:
         stats = compute_message_stats([], "U_ME")
         output = format_message_report(stats, "DM with Alice")
         assert "No messages found" in output
+
+
+class TestBusiestDay:
+    def test_busiest_day(self):
+        from datetime import datetime as dt, timezone as tz
+        # 3 messages on day 1, 5 on day 2
+        base1 = dt(2026, 4, 6, 10, 0, tzinfo=tz.utc).timestamp()
+        base2 = dt(2026, 4, 7, 10, 0, tzinfo=tz.utc).timestamp()
+        msgs = []
+        for i in range(3):
+            msgs.append({"user": "U_ME", "ts": str(base1 + i * 60), "text": "msg", "subtype": None})
+        for i in range(5):
+            msgs.append({"user": "U_ME", "ts": str(base2 + i * 60), "text": "msg", "subtype": None})
+        stats = compute_message_stats(msgs, "U_ME")
+        assert stats["busiest_day_count"] == 5
+        assert stats["busiest_day_date"] == "2026-04-07"

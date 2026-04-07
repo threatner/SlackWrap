@@ -142,6 +142,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "their_links_shared": 0,
             "your_files_shared": 0,
             "their_files_shared": 0,
+            "busiest_day_date": "", "busiest_day_count": 0,
         }
 
     you_msgs = [m for m in user_msgs if m["user"] == user_id]
@@ -194,6 +195,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     weekday: Counter[str] = Counter()
     hourly: Counter[int] = Counter()
     monthly: Counter[str] = Counter()
+    daily: Counter[str] = Counter()
     timestamps = []
     active_dates_set = set()
     for m in sorted_msgs:
@@ -202,8 +204,17 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         weekday[dt.strftime("%A")] += 1
         hourly[dt.hour] += 1
         monthly[dt.strftime("%Y-%m")] += 1
+        daily[dt.strftime("%Y-%m-%d")] += 1
         timestamps.append(ts_float)
         active_dates_set.add(dt.date())
+
+    if daily:
+        busiest_day = daily.most_common(1)[0]
+        busiest_day_date = busiest_day[0]
+        busiest_day_count = busiest_day[1]
+    else:
+        busiest_day_date = ""
+        busiest_day_count = 0
 
     active_dates = sorted(active_dates_set)
 
@@ -450,6 +461,8 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "their_links_shared": their_links,
         "your_files_shared": your_files,
         "their_files_shared": their_files,
+        "busiest_day_date": busiest_day_date,
+        "busiest_day_count": busiest_day_count,
         "_user_id": user_id,
     }
 
@@ -479,6 +492,8 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
     if stats["span_days"] > 0:
         per_week = stats["total_messages"] / max(stats["span_days"] / 7, 1)
         lines.append(f"  Per week:         {per_week:.1f} messages")
+    if stats.get("busiest_day_count", 0) > 0:
+        lines.append(f"  Busiest day:      {stats['busiest_day_date']} ({stats['busiest_day_count']:,} messages)")
 
     # Trends
     if stats.get("trend_last_30d_count") is not None or stats.get("trend_prev_30d_count"):

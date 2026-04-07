@@ -54,6 +54,8 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         if m_stats["span_days"] > 0:
             per_week = m_stats["total_messages"] / max(m_stats["span_days"] / 7, 1)
             lines.append(f"  Per week:         {per_week:.1f} messages")
+        if m_stats.get("busiest_day_count", 0) > 0:
+            lines.append(f"  Busiest day:      {m_stats['busiest_day_date']} ({m_stats['busiest_day_count']:,} messages)")
         lines.append("")
 
     # --- Trends ---

@@ -92,6 +92,17 @@ def generate_html_report(
             <div class="stat-row"><span class="label">Shortest</span><span class="value">{format_duration(h_stats['shortest_seconds'])}</span></div>
         """))
 
+    # Messages overview
+    if has_messages:
+        msg_overview_html = f"""
+            <div class="stat-row"><span class="label">Total</span><span class="value">{m_stats['total_messages']:,}</span></div>
+            <div class="stat-row"><span class="label">{your_name}</span><span class="value">{m_stats['you_count']:,} ({m_stats['you_pct']:.0f}%)</span></div>
+            <div class="stat-row"><span class="label">{their_name}</span><span class="value">{m_stats['them_count']:,} ({m_stats['them_pct']:.0f}%)</span></div>
+        """
+        if m_stats.get("busiest_day_count", 0) > 0:
+            msg_overview_html += f'<div class="stat-row"><span class="label">Busiest day</span><span class="value">{_escape(m_stats["busiest_day_date"])} <small>{m_stats["busiest_day_count"]:,} messages</small></span></div>'
+        cards.append(_card("Messages", msg_overview_html))
+
     # Message style
     if has_messages:
         cards.append(_card("Message Style", f"""
