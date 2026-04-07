@@ -178,6 +178,42 @@ class TestThreadBreakdown:
         assert stats["threads_started_by_them"] == 0
 
 
+class TestResponseTimeByHour:
+    def test_response_time_by_hour(self):
+        from datetime import datetime as dt, timezone as tz
+        base = dt(2026, 4, 7, 10, 0, tzinfo=tz.utc).timestamp()  # 10 AM UTC
+        msgs = []
+        for i in range(6):
+            # Alternating A and B, 5 min apart, all at ~10 AM UTC
+            msgs.append({"user": "A" if i % 2 == 0 else "B", "ts": str(base + i * 300), "text": "msg", "subtype": None})
+        stats = compute_message_stats(msgs, "A")
+        # Should have data for the local hour equivalent of 10 AM UTC
+        expected_hour = dt.fromtimestamp(base, tz=tz.utc).astimezone().hour
+        assert expected_hour in stats["response_time_by_hour"]
+
+
+class TestLinksShared:
+    def test_links_shared(self):
+        msgs = [
+            {"user": "U_ME", "ts": "1.0", "text": "check <https://example.com> and <https://foo.bar>", "subtype": None},
+            {"user": "U001", "ts": "2.0", "text": "see <https://test.com>", "subtype": None},
+            {"user": "U_ME", "ts": "3.0", "text": "no links here", "subtype": None},
+        ]
+        stats = compute_message_stats(msgs, "U_ME")
+        assert stats["your_links_shared"] == 2
+        assert stats["their_links_shared"] == 1
+
+    def test_files_shared(self):
+        msgs = [
+            {"user": "U_ME", "ts": "1.0", "text": "here", "subtype": None, "files_count": 2, "file_types": ["png", "pdf"]},
+            {"user": "U001", "ts": "2.0", "text": "thanks", "subtype": None, "files_count": 1, "file_types": ["jpg"]},
+            {"user": "U_ME", "ts": "3.0", "text": "no files", "subtype": None},
+        ]
+        stats = compute_message_stats(msgs, "U_ME")
+        assert stats["your_files_shared"] == 2
+        assert stats["their_files_shared"] == 1
+
+
 class TestFormatMessageReport:
     def test_formats_report(self):
         stats = compute_message_stats(SAMPLE_MESSAGES, "U_ME")

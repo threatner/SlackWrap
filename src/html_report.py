@@ -44,6 +44,11 @@ def generate_html_report(
     monthly_labels = json.dumps(list(m_stats.get("monthly_breakdown", {}).keys())) if has_messages else "[]"
     monthly_data = json.dumps(list(m_stats.get("monthly_breakdown", {}).values())) if has_messages else "[]"
 
+    # Response time by hour chart data
+    resp_by_hour = m_stats.get("response_time_by_hour", {}) if has_messages else {}
+    response_by_hour_labels = json.dumps([f"{h:02d}:00" for h in sorted(resp_by_hour.keys())])
+    response_by_hour_data = json.dumps([round(resp_by_hour[h] / 60, 1) for h in sorted(resp_by_hour.keys())])
+
     msg_split_data = json.dumps([m_stats["you_count"], m_stats["them_count"]]) if has_messages else "[]"
     msg_split_labels = json.dumps([your_name, their_name])
 
@@ -144,6 +149,27 @@ def generate_html_report(
             top_str = " ".join(f'<span class="emoji-badge">:{name}: <small>{count}</small></span>' for name, count in m_stats["their_top_text_emojis"])
             emoji_html += f'<div class="emoji-row">{top_str}</div>'
         cards.append(_card("Emojis in Messages", emoji_html))
+
+    # Response Time by Hour (card — fastest/slowest)
+    if has_messages and resp_by_hour:
+        fastest_hour = min(resp_by_hour, key=resp_by_hour.get)
+        slowest_hour = max(resp_by_hour, key=resp_by_hour.get)
+        cards.append(_card("Response Time by Hour", f"""
+            <div class="stat-row"><span class="label">Fastest</span><span class="value">{fastest_hour:02d}:00 <small>{format_duration(resp_by_hour[fastest_hour])} median</small></span></div>
+            <div class="stat-row"><span class="label">Slowest</span><span class="value">{slowest_hour:02d}:00 <small>{format_duration(resp_by_hour[slowest_hour])} median</small></span></div>
+        """))
+
+    # Links & Files
+    if has_messages:
+        your_links = m_stats.get("your_links_shared", 0)
+        their_links = m_stats.get("their_links_shared", 0)
+        your_files = m_stats.get("your_files_shared", 0)
+        their_files = m_stats.get("their_files_shared", 0)
+        if your_links > 0 or their_links > 0 or your_files > 0 or their_files > 0:
+            cards.append(_card("Links & Files", f"""
+                <div class="stat-row"><span class="label">{your_name}</span><span class="value">{your_links} links &middot; {your_files} files</span></div>
+                <div class="stat-row"><span class="label">{their_name}</span><span class="value">{their_links} links &middot; {their_files} files</span></div>
+            """))
 
     # Thread Activity
     if has_messages and m_stats.get("top_level_messages") is not None:
@@ -312,6 +338,13 @@ body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans
   <canvas id="weekdayChart"></canvas>
 </div>
 
+{"" if not resp_by_hour else f'''
+<div class="chart-card">
+  <h2>Median Response Time by Hour (minutes)</h2>
+  <canvas id="responseByHourChart"></canvas>
+</div>
+'''}
+
 <div class="section-title">Details</div>
 <div class="grid">
 {cards_html}
@@ -407,6 +440,29 @@ new Chart(document.getElementById('weekdayChart'), {{
     }}
   }}
 }});
+
+{"" if not resp_by_hour else f"""
+const responseByHourLabels = {response_by_hour_labels};
+const responseByHourData = {response_by_hour_data};
+new Chart(document.getElementById('responseByHourChart'), {{
+  type: 'bar',
+  data: {{
+    labels: responseByHourLabels,
+    datasets: [{{
+      label: 'Median Response (min)',
+      data: responseByHourData,
+      backgroundColor: 'rgba(63,185,80,0.6)',
+      borderRadius: 6,
+      borderSkipped: false,
+    }}]
+  }},
+  options: {{
+    responsive: true,
+    plugins: {{ legend: {{ display: false }} }},
+    scales: {{ y: {{ beginAtZero: true, grid: {{ color: '#161b22' }} }}, x: {{ grid: {{ display: false }} }} }}
+  }}
+}});
+"""}
 
 // Emoji rendering via gemoji CDN
 document.addEventListener('DOMContentLoaded', async () => {{

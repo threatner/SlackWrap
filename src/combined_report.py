@@ -129,6 +129,31 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
         lines.append(f"  {their_name + ':':<16} {format_duration(m_stats['their_median_response_seconds'])} median, {format_duration(m_stats['their_avg_response_seconds'])} avg")
         lines.append("")
 
+    # --- Response Time by Hour ---
+    if has_messages:
+        resp_by_hour = m_stats.get("response_time_by_hour", {})
+        if resp_by_hour:
+            lines.append("Response Time by Hour")
+            lines.append("-" * 55)
+            fastest_hour = min(resp_by_hour, key=resp_by_hour.get)
+            slowest_hour = max(resp_by_hour, key=resp_by_hour.get)
+            lines.append(f"  Fastest:          {fastest_hour:02d}:00 ({format_duration(resp_by_hour[fastest_hour])} median)")
+            lines.append(f"  Slowest:          {slowest_hour:02d}:00 ({format_duration(resp_by_hour[slowest_hour])} median)")
+            lines.append("")
+
+    # --- Links & Files ---
+    if has_messages:
+        your_links = m_stats.get("your_links_shared", 0)
+        their_links = m_stats.get("their_links_shared", 0)
+        your_files = m_stats.get("your_files_shared", 0)
+        their_files = m_stats.get("their_files_shared", 0)
+        if your_links > 0 or their_links > 0 or your_files > 0 or their_files > 0:
+            lines.append("Links & Files")
+            lines.append("-" * 55)
+            lines.append(f"  {your_name + ':':<16} {your_links} links, {your_files} files")
+            lines.append(f"  {their_name + ':':<16} {their_links} links, {their_files} files")
+            lines.append("")
+
     # --- Message Style ---
     if has_messages:
         lines.append("Message Style")

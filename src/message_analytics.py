@@ -127,6 +127,11 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "thread_pct": 0.0,
             "threads_started_by_you": 0,
             "threads_started_by_them": 0,
+            "response_time_by_hour": {},
+            "your_links_shared": 0,
+            "their_links_shared": 0,
+            "your_files_shared": 0,
+            "their_files_shared": 0,
         }
 
     you_msgs = [m for m in user_msgs if m["user"] == user_id]
@@ -322,6 +327,31 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     your_top_text_emojis = your_text_emoji_counter.most_common(5)
     their_top_text_emojis = their_text_emoji_counter.most_common(5)
 
+    # --- Response Time by Hour ---
+    response_by_hour: dict[int, list[int]] = {}
+    for i in range(1, len(turns)):
+        prev_turn = turns[i - 1]
+        curr_turn = turns[i]
+        delta = int(curr_turn["start_ts"] - prev_turn["start_ts"])
+        if delta >= INITIATION_GAP_SECONDS:
+            continue
+        if prev_turn["user"] != curr_turn["user"]:
+            hour = datetime.fromtimestamp(curr_turn["start_ts"], tz=timezone.utc).astimezone().hour
+            if hour not in response_by_hour:
+                response_by_hour[hour] = []
+            response_by_hour[hour].append(delta)
+
+    response_time_by_hour: dict[int, int] = {}
+    for hour, times in sorted(response_by_hour.items()):
+        if len(times) >= 3:
+            response_time_by_hour[hour] = _median(times)
+
+    # --- Links & Files ---
+    your_links = sum(len(_LINK_RE.findall(m.get("text", ""))) for m in you_msgs)
+    their_links = sum(len(_LINK_RE.findall(m.get("text", ""))) for m in them_msgs)
+    your_files = sum(m.get("files_count", 0) for m in you_msgs)
+    their_files = sum(m.get("files_count", 0) for m in them_msgs)
+
     # --- Thread Breakdown ---
     top_level = [m for m in user_msgs if not m.get("thread_ts") or m.get("thread_ts") == m.get("ts")]
     thread_replies = [m for m in user_msgs if m.get("thread_ts") and m.get("thread_ts") != m.get("ts")]
@@ -395,6 +425,11 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "thread_pct": thread_pct,
         "threads_started_by_you": thread_parents_you,
         "threads_started_by_them": thread_parents_them,
+        "response_time_by_hour": response_time_by_hour,
+        "your_links_shared": your_links,
+        "their_links_shared": their_links,
+        "your_files_shared": your_files,
+        "their_files_shared": their_files,
     }
 
 
@@ -482,6 +517,29 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
         lines.append("-" * 50)
         lines.append(f"  {your_name + ':':<16} {format_duration(stats['your_median_response_seconds'])} median, {format_duration(stats['your_avg_response_seconds'])} avg")
         lines.append(f"  {their_name + ':':<16} {format_duration(stats['their_median_response_seconds'])} median, {format_duration(stats['their_avg_response_seconds'])} avg")
+
+    # Response Time by Hour
+    resp_by_hour = stats.get("response_time_by_hour", {})
+    if resp_by_hour:
+        lines.append("")
+        lines.append("Response Time by Hour")
+        lines.append("-" * 50)
+        fastest_hour = min(resp_by_hour, key=resp_by_hour.get)
+        slowest_hour = max(resp_by_hour, key=resp_by_hour.get)
+        lines.append(f"  Fastest:          {fastest_hour:02d}:00 ({format_duration(resp_by_hour[fastest_hour])} median)")
+        lines.append(f"  Slowest:          {slowest_hour:02d}:00 ({format_duration(resp_by_hour[slowest_hour])} median)")
+
+    # Links & Files
+    your_links = stats.get("your_links_shared", 0)
+    their_links = stats.get("their_links_shared", 0)
+    your_files = stats.get("your_files_shared", 0)
+    their_files = stats.get("their_files_shared", 0)
+    if your_links > 0 or their_links > 0 or your_files > 0 or their_files > 0:
+        lines.append("")
+        lines.append("Links & Files")
+        lines.append("-" * 50)
+        lines.append(f"  {your_name + ':':<16} {your_links} links, {your_files} files")
+        lines.append(f"  {their_name + ':':<16} {their_links} links, {their_files} files")
 
     # Message style
     lines.append("")
