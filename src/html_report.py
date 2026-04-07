@@ -264,11 +264,19 @@ new Chart(document.getElementById('weekdayChart'), {{
     data: {{
         labels: {weekday_labels},
         datasets: [
-            {"" if not has_messages else f"{{ label: 'Messages', data: {weekday_data}, backgroundColor: '#388bfd', borderRadius: 4 }},"}
-            {"" if not has_huddles else f"{{ label: 'Huddles', data: {h_weekday_data}, backgroundColor: '#f78166', borderRadius: 4 }},"}
+            {"" if not has_messages else f"{{ label: 'Messages', data: {weekday_data}, backgroundColor: '#388bfd', borderRadius: 4, yAxisID: 'y' }},"}
+            {"" if not has_huddles else f"{{ label: 'Huddles', data: {h_weekday_data}, backgroundColor: '#f78166', borderRadius: 4, yAxisID: 'y1' }},"}
         ]
     }},
-    options: {{ responsive: true, plugins: {{ legend: {{ display: true, position: 'top' }} }}, scales: {{ y: {{ beginAtZero: true, grid: {{ color: '#21262d' }} }}, x: {{ grid: {{ display: false }} }} }} }}
+    options: {{
+        responsive: true,
+        plugins: {{ legend: {{ display: true, position: 'top' }} }},
+        scales: {{
+            y: {{ beginAtZero: true, position: 'left', grid: {{ color: '#21262d' }}, title: {{ display: true, text: 'Messages', color: '#388bfd' }} }},
+            y1: {{ beginAtZero: true, position: 'right', grid: {{ drawOnChartArea: false }}, title: {{ display: true, text: 'Huddles', color: '#f78166' }} }},
+            x: {{ grid: {{ display: false }} }}
+        }}
+    }}
 }});
 </script>
 </body>
