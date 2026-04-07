@@ -72,3 +72,54 @@ class TestCacheManager:
             f.write("not valid json{{{")
         result = self.cm.load("D001")
         assert result is None
+
+    def test_trim_message_includes_thread_fields(self):
+        msg = {
+            "user": "U001", "ts": "1.0", "text": "reply",
+            "subtype": None, "thread_ts": "0.5", "reply_count": 3,
+        }
+        trimmed = CacheManager.trim_message(msg)
+        assert trimmed["thread_ts"] == "0.5"
+        assert trimmed["reply_count"] == 3
+
+    def test_trim_message_includes_file_fields(self):
+        msg = {
+            "user": "U001", "ts": "1.0", "text": "check this",
+            "subtype": None,
+            "files": [
+                {"filetype": "png", "name": "screenshot.png"},
+                {"filetype": "pdf", "name": "doc.pdf"},
+            ],
+        }
+        trimmed = CacheManager.trim_message(msg)
+        assert trimmed["files_count"] == 2
+        assert trimmed["file_types"] == ["png", "pdf"]
+
+    def test_trim_message_no_files_defaults(self):
+        msg = {"user": "U001", "ts": "1.0", "text": "hi", "subtype": None}
+        trimmed = CacheManager.trim_message(msg)
+        assert trimmed["files_count"] == 0
+        assert trimmed["file_types"] == []
+        assert trimmed["thread_ts"] is None
+        assert trimmed["reply_count"] == 0
+
+    def test_load_clears_old_version_cache(self):
+        # Save with old format (no version key)
+        old_data = {
+            "channel_id": "D001",
+            "last_ts": "1.0",
+            "messages": [{"user": "U001", "ts": "1.0", "text": "a", "subtype": None}],
+        }
+        path = os.path.join(self.tmpdir, "D001.json")
+        with open(path, "w") as f:
+            json.dump(old_data, f)
+
+        result = self.cm.load("D001")
+        assert result is None
+        assert not os.path.exists(path)
+
+    def test_load_returns_current_version(self):
+        self.cm.save("D001", [{"user": "U001", "ts": "1.0", "text": "a", "subtype": None}], last_ts="1.0")
+        result = self.cm.load("D001")
+        assert result is not None
+        assert result["version"] == 2

@@ -1,6 +1,8 @@
 import json
 import os
 
+CACHE_VERSION = 2
+
 
 class CacheManager:
     def __init__(self, cache_dir: str = ".cache"):
@@ -17,6 +19,11 @@ class CacheManager:
             "text": msg.get("text", ""),
             "subtype": msg.get("subtype"),
         }
+        trimmed["thread_ts"] = msg.get("thread_ts")
+        trimmed["reply_count"] = msg.get("reply_count", 0)
+        files = msg.get("files", [])
+        trimmed["files_count"] = len(files)
+        trimmed["file_types"] = [f.get("filetype", "") for f in files]
         if msg.get("reactions"):
             trimmed["reactions"] = [
                 {"name": r.get("name", ""), "users": r.get("users", []), "count": r.get("count", 0)}
@@ -39,13 +46,18 @@ class CacheManager:
             return None
         try:
             with open(path, "r") as f:
-                return json.load(f)
+                data = json.load(f)
+            if data.get("version", 0) < CACHE_VERSION:
+                os.remove(path)
+                return None
+            return data
         except (json.JSONDecodeError, KeyError):
             return None
 
     def save(self, channel_id: str, messages: list[dict], last_ts: str):
         os.makedirs(self.cache_dir, exist_ok=True)
         data = {
+            "version": CACHE_VERSION,
             "channel_id": channel_id,
             "last_ts": last_ts,
             "messages": messages,
