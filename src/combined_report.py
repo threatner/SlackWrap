@@ -59,6 +59,34 @@ def format_combined_report(h_stats: dict, m_stats: dict, channel_label: str, you
             lines.append(f"  Per week:         {per_week:.1f} messages")
         lines.append("")
 
+    # --- Trends ---
+    if has_messages and m_stats.get("trend_last_30d_count") is not None:
+        lines.append("Trends")
+        lines.append("-" * 55)
+        pct_30d = m_stats.get("trend_30d_pct_change")
+        if pct_30d is None:
+            pct_30d_str = "(no prior data)"
+        else:
+            pct_30d_str = f"+{pct_30d}%" if pct_30d >= 0 else f"{pct_30d}%"
+        lines.append(f"  Last 30 days:     {m_stats['trend_last_30d_count']:,} messages ({pct_30d_str} vs previous 30d)")
+        pct_yoy = m_stats.get("trend_yoy_pct_change")
+        if pct_yoy is None:
+            pct_yoy_str = "(no prior data)"
+        else:
+            pct_yoy_str = f"+{pct_yoy}%" if pct_yoy >= 0 else f"{pct_yoy}%"
+        current_month_label = m_stats.get("trend_current_month", "")
+        try:
+            current_month_display = datetime.strptime(current_month_label, "%Y-%m").strftime("%b %Y") if current_month_label else ""
+        except ValueError:
+            current_month_display = current_month_label
+        yoy_label = m_stats.get("trend_yoy_month", "")
+        try:
+            yoy_display = datetime.strptime(yoy_label, "%Y-%m").strftime("%b %Y") if yoy_label else "prior year"
+        except ValueError:
+            yoy_display = yoy_label
+        lines.append(f"  {current_month_display + ':':<16} {m_stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {yoy_display})")
+        lines.append("")
+
     # --- Who Initiates (combined) ---
     lines.append("Who Initiates")
     lines.append("-" * 55)

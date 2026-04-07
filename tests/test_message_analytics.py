@@ -1,3 +1,4 @@
+from datetime import datetime
 from src.message_analytics import compute_message_stats, format_message_report, _clean_text_for_word_count, _build_turns
 
 
@@ -141,6 +142,25 @@ class TestComputeMessageStats:
         stats = compute_message_stats(SAMPLE_MESSAGES, "U_ME")
         assert isinstance(stats["hourly_breakdown"], dict)
         assert sum(stats["hourly_breakdown"].values()) == 5
+
+
+class TestTrendAnalysis:
+    def test_trend_30d(self):
+        from datetime import date, timedelta, timezone as tz
+        now = date.today()
+        msgs = []
+        for i in range(10):
+            d = now - timedelta(days=i+1)
+            ts = datetime(d.year, d.month, d.day, tzinfo=tz.utc).timestamp()
+            msgs.append({"user": "U_ME", "ts": str(ts), "text": "recent", "subtype": None})
+        for i in range(5):
+            d = now - timedelta(days=35+i)
+            ts = datetime(d.year, d.month, d.day, tzinfo=tz.utc).timestamp()
+            msgs.append({"user": "U_ME", "ts": str(ts), "text": "older", "subtype": None})
+        stats = compute_message_stats(msgs, "U_ME")
+        assert stats["trend_last_30d_count"] == 10
+        assert stats["trend_prev_30d_count"] == 5
+        assert stats["trend_30d_pct_change"] == 100.0
 
 
 class TestFormatMessageReport:

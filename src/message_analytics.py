@@ -114,6 +114,14 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "top_reactions": [], "your_top_reactions": [], "their_top_reactions": [],
             "your_text_emoji_total": 0, "their_text_emoji_total": 0,
             "your_top_text_emojis": [], "their_top_text_emojis": [],
+            "trend_last_30d_count": 0,
+            "trend_prev_30d_count": 0,
+            "trend_30d_pct_change": None,
+            "trend_current_month": "",
+            "trend_current_month_count": 0,
+            "trend_yoy_month": "",
+            "trend_yoy_count": None,
+            "trend_yoy_pct_change": None,
         }
 
     you_msgs = [m for m in user_msgs if m["user"] == user_id]
@@ -309,6 +317,20 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     your_top_text_emojis = your_text_emoji_counter.most_common(5)
     their_top_text_emojis = their_text_emoji_counter.most_common(5)
 
+    # --- Trend Analysis ---
+    now = date.today()
+    last_30d = [m for m in sorted_msgs if (now - datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()).days < 30]
+    prev_30d = [m for m in sorted_msgs if 30 <= (now - datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()).days < 60]
+    trend_last_30d = len(last_30d)
+    trend_prev_30d = len(prev_30d)
+    trend_30d_pct = round((trend_last_30d - trend_prev_30d) / trend_prev_30d * 100, 1) if trend_prev_30d > 0 else None
+
+    current_month = now.strftime("%Y-%m")
+    yoy_month = f"{now.year - 1}-{now.strftime('%m')}"
+    trend_current_month_count = monthly.get(current_month, 0)
+    trend_yoy_count = monthly.get(yoy_month, None)
+    trend_yoy_pct = round((trend_current_month_count - trend_yoy_count) / trend_yoy_count * 100, 1) if trend_yoy_count else None
+
     return {
         "total_messages": total,
         "you_count": len(you_msgs),
@@ -347,6 +369,14 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "their_text_emoji_total": their_text_emoji_total,
         "your_top_text_emojis": your_top_text_emojis,
         "their_top_text_emojis": their_top_text_emojis,
+        "trend_last_30d_count": trend_last_30d,
+        "trend_prev_30d_count": trend_prev_30d,
+        "trend_30d_pct_change": trend_30d_pct,
+        "trend_current_month": current_month,
+        "trend_current_month_count": trend_current_month_count,
+        "trend_yoy_month": yoy_month,
+        "trend_yoy_count": trend_yoy_count,
+        "trend_yoy_pct_change": trend_yoy_pct,
     }
 
 
@@ -375,6 +405,29 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
     if stats["span_days"] > 0:
         per_week = stats["total_messages"] / max(stats["span_days"] / 7, 1)
         lines.append(f"  Per week:         {per_week:.1f} messages")
+
+    # Trends
+    if stats.get("trend_last_30d_count") is not None or stats.get("trend_prev_30d_count"):
+        lines.append("")
+        lines.append("Trends")
+        lines.append("-" * 50)
+        pct_30d = stats.get("trend_30d_pct_change")
+        if pct_30d is None:
+            pct_30d_str = "(no prior data)"
+        else:
+            pct_30d_str = f"+{pct_30d}%" if pct_30d >= 0 else f"{pct_30d}%"
+        lines.append(f"  Last 30 days:     {stats['trend_last_30d_count']:,} messages ({pct_30d_str} vs previous 30d)")
+        pct_yoy = stats.get("trend_yoy_pct_change")
+        if pct_yoy is None:
+            pct_yoy_str = "(no prior data)"
+        else:
+            pct_yoy_str = f"+{pct_yoy}%" if pct_yoy >= 0 else f"{pct_yoy}%"
+        current_month_label = stats.get("trend_current_month", "")
+        try:
+            current_month_display = datetime.strptime(current_month_label, "%Y-%m").strftime("%b %Y") if current_month_label else ""
+        except ValueError:
+            current_month_display = current_month_label
+        lines.append(f"  {current_month_display + ':':<16} {stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {datetime.strptime(stats['trend_yoy_month'], '%Y-%m').strftime('%b %Y') if stats.get('trend_yoy_month') else 'prior year'})")
 
     # Who initiates
     total_init = stats["you_initiated"] + stats["them_initiated"]
