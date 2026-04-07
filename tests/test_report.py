@@ -1,4 +1,4 @@
-from src.report import format_duration, compute_stats, format_report, extract_huddles
+from src.report import format_duration, compute_stats, format_report, extract_huddles, DAY_ORDER, format_pct_change, format_month_label, median
 
 
 class TestFormatDuration:
@@ -76,10 +76,7 @@ class TestFormatReport:
         ]
         stats = compute_stats(huddles, "U_ME")
 
-        def mock_resolve(uid):
-            return {"U_ME": "You", "U001": "Alice"}.get(uid, uid)
-
-        output = format_report(stats, "DM with Alice", mock_resolve)
+        output = format_report(stats, "DM with Alice")
 
         assert "Huddle Time Report" in output
         assert "DM with Alice" in output
@@ -100,7 +97,7 @@ class TestFormatReport:
     def test_formats_empty_report(self):
         stats = compute_stats([], "U_ME")
 
-        output = format_report(stats, "DM with Alice", lambda uid: uid)
+        output = format_report(stats, "DM with Alice")
 
         assert "No huddles found" in output
 

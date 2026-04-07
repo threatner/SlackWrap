@@ -1,9 +1,8 @@
 import json
 import os
 from datetime import datetime, timezone
-from src.report import format_duration
+from src.report import format_duration, DAY_ORDER, format_pct_change, format_month_label
 
-DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -189,28 +188,11 @@ def generate_html_report(
 
     # Trends
     if has_messages and m_stats.get("trend_last_30d_count") is not None:
-        pct_30d = m_stats.get("trend_30d_pct_change")
-        if pct_30d is None:
-            pct_30d_str = "(no prior data)"
-        else:
-            sign = "+" if pct_30d >= 0 else ""
-            pct_30d_str = f"{sign}{pct_30d}%"
-        pct_yoy = m_stats.get("trend_yoy_pct_change")
-        if pct_yoy is None:
-            pct_yoy_str = "(no prior data)"
-        else:
-            sign = "+" if pct_yoy >= 0 else ""
-            pct_yoy_str = f"{sign}{pct_yoy}%"
-        current_month_label = m_stats.get("trend_current_month", "")
-        try:
-            current_month_display = datetime.strptime(current_month_label, "%Y-%m").strftime("%b %Y") if current_month_label else ""
-        except ValueError:
-            current_month_display = current_month_label
+        pct_30d_str = format_pct_change(m_stats.get("trend_30d_pct_change"))
+        pct_yoy_str = format_pct_change(m_stats.get("trend_yoy_pct_change"))
+        current_month_display = format_month_label(m_stats.get("trend_current_month", ""))
         yoy_label = m_stats.get("trend_yoy_month", "")
-        try:
-            yoy_display = datetime.strptime(yoy_label, "%Y-%m").strftime("%b %Y") if yoy_label else "prior year"
-        except ValueError:
-            yoy_display = yoy_label
+        yoy_display = format_month_label(yoy_label) if yoy_label else "prior year"
         trend_html = f"""
             <div class="stat-row"><span class="label">Last 30 days</span><span class="value">{m_stats['trend_last_30d_count']:,} messages <small>{pct_30d_str} vs prev 30d</small></span></div>
             <div class="stat-row"><span class="label">{_escape(current_month_display)}</span><span class="value">{m_stats['trend_current_month_count']:,} messages <small>{pct_yoy_str} vs {_escape(yoy_display)}</small></span></div>

@@ -65,15 +65,16 @@ class CacheManager:
         with open(self._path(channel_id), "w") as f:
             json.dump(data, f)
 
-    def append(self, channel_id: str, new_messages: list[dict], last_ts: str):
+    def append(self, channel_id: str, new_messages: list[dict], last_ts: str) -> list[dict]:
         existing = self.load(channel_id)
         if existing is None:
             self.save(channel_id, new_messages, last_ts)
-            return
+            return new_messages
         existing["messages"].extend(new_messages)
         existing["last_ts"] = last_ts
         with open(self._path(channel_id), "w") as f:
             json.dump(existing, f)
+        return existing["messages"]
 
     def clear(self, channel_id: str):
         path = self._path(channel_id)

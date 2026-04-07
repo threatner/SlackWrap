@@ -1,6 +1,31 @@
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Callable
+
+DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def format_pct_change(pct: float | None) -> str:
+    if pct is None:
+        return "(no prior data)"
+    sign = "+" if pct >= 0 else ""
+    return f"{sign}{pct}%"
+
+
+def format_month_label(label: str) -> str:
+    try:
+        return datetime.strptime(label, "%Y-%m").strftime("%b %Y")
+    except ValueError:
+        return label
+
+
+def median(values: list[int]) -> int:
+    if not values:
+        return 0
+    s = sorted(values)
+    n = len(s)
+    if n % 2 == 1:
+        return s[n // 2]
+    return (s[n // 2 - 1] + s[n // 2]) // 2
 
 
 def format_duration(seconds: int) -> str:
@@ -59,12 +84,7 @@ def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None 
         h["room"]["date_end"] - h["room"]["date_start"]
         for h in user_huddles
     ]
-    sorted_durations = sorted(durations)
-    n = len(sorted_durations)
-    if n % 2 == 1:
-        median = sorted_durations[n // 2]
-    else:
-        median = (sorted_durations[n // 2 - 1] + sorted_durations[n // 2]) // 2
+    median_val = median(durations)
 
     started_by_you = sum(1 for h in user_huddles if h["room"]["created_by"] == user_id)
     if target_user_id:
@@ -87,7 +107,7 @@ def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None 
         "avg_seconds": sum(durations) // len(durations),
         "longest_seconds": max(durations),
         "shortest_seconds": min(durations),
-        "median_seconds": median,
+        "median_seconds": median_val,
         "huddles": user_huddles,
         "started_by_you": started_by_you,
         "started_by_them": started_by_them,
@@ -97,7 +117,7 @@ def compute_stats(huddles: list[dict], user_id: str, target_user_id: str | None 
     }
 
 
-def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str], str], your_name: str = "You", their_name: str = "Them") -> str:
+def format_report(stats: dict, channel_label: str, your_name: str = "You", their_name: str = "Them") -> str:
     if stats["total_huddles"] == 0:
         return f"\nHuddle Time Report\n==================\nChannel: {channel_label}\n\nNo huddles found.\n"
 
@@ -149,8 +169,7 @@ def format_report(stats: dict, channel_label: str, resolve_name: Callable[[str],
     # Busiest day of week
     weekday = stats.get("weekday_breakdown", {})
     if weekday:
-        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        sorted_days = sorted(weekday.items(), key=lambda x: day_order.index(x[0]) if x[0] in day_order else 7)
+        sorted_days = sorted(weekday.items(), key=lambda x: DAY_ORDER.index(x[0]) if x[0] in DAY_ORDER else 7)
         lines.append("")
         lines.append("By Day of Week")
         lines.append("-" * 50)

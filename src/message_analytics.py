@@ -2,7 +2,7 @@ import re
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 
-from src.report import format_duration
+from src.report import format_duration, format_pct_change, format_month_label, median, DAY_ORDER
 
 SYSTEM_SUBTYPES = {
     "huddle_thread", "channel_join", "channel_leave", "channel_topic",
@@ -35,6 +35,14 @@ def _extract_text_emojis(text: str) -> list[str]:
 def _clean_text_for_word_count(text: str) -> str:
     text = _CODE_BLOCK_RE.sub("", text)
     text = _INLINE_CODE_RE.sub("", text)
+    text = _MENTION_RE.sub("", text)
+    text = _LINK_RE.sub("", text)
+    text = _EMOJI_RE.sub("", text)
+    return text.strip()
+
+
+def _clean_text_for_word_count_prestripped(text: str) -> str:
+    """Like _clean_text_for_word_count but skips code-block stripping (already done)."""
     text = _MENTION_RE.sub("", text)
     text = _LINK_RE.sub("", text)
     text = _EMOJI_RE.sub("", text)
@@ -78,16 +86,6 @@ def _build_turns(sorted_msgs: list[dict]) -> list[dict]:
             }
     turns.append(current)
     return turns
-
-
-def _median(values: list[int]) -> int:
-    if not values:
-        return 0
-    s = sorted(values)
-    n = len(s)
-    if n % 2 == 1:
-        return s[n // 2]
-    return (s[n // 2 - 1] + s[n // 2]) // 2
 
 
 def compute_message_stats(messages: list[dict], user_id: str, target_user_id: str | None = None) -> dict:
@@ -138,9 +136,17 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     them_msgs = [m for m in user_msgs if m["user"] != user_id]
     total = len(user_msgs)
 
-    # Word counts — strip code blocks, mentions, links, emoji
-    you_words = [len(_clean_text_for_word_count(m.get("text", "")).split()) for m in you_msgs] if you_msgs else [0]
-    them_words = [len(_clean_text_for_word_count(m.get("text", "")).split()) for m in them_msgs] if them_msgs else [0]
+    # Strip code blocks once per message; reuse for word counts and emoji extraction
+    _cleaned_texts: dict[str, str] = {}
+    for m in user_msgs:
+        text = m.get("text", "")
+        text = _CODE_BLOCK_RE.sub("", text)
+        text = _INLINE_CODE_RE.sub("", text)
+        _cleaned_texts[m["ts"]] = text
+
+    # Word counts — strip code blocks (pre-stripped), mentions, links, emoji
+    you_words = [len(_clean_text_for_word_count_prestripped(_cleaned_texts[m["ts"]]).split()) for m in you_msgs] if you_msgs else [0]
+    them_words = [len(_clean_text_for_word_count_prestripped(_cleaned_texts[m["ts"]]).split()) for m in them_msgs] if them_msgs else [0]
     # Filter out zero-word messages (file uploads with no text) from avg
     you_words_nonzero = [w for w in you_words if w > 0] or [0]
     them_words_nonzero = [w for w in them_words if w > 0] or [0]
@@ -184,20 +190,25 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
 
     your_avg_resp = int(sum(your_response_times) / len(your_response_times)) if your_response_times else 0
     their_avg_resp = int(sum(their_response_times) / len(their_response_times)) if their_response_times else 0
-    your_median_resp = _median(your_response_times)
-    their_median_resp = _median(their_response_times)
+    your_median_resp = median(your_response_times)
+    their_median_resp = median(their_response_times)
 
-    # Time breakdowns
+    # Time breakdowns + active dates (single pass)
     weekday: Counter[str] = Counter()
     hourly: Counter[int] = Counter()
     monthly: Counter[str] = Counter()
     timestamps = []
+    active_dates_set = set()
     for m in sorted_msgs:
-        dt = datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone()
+        ts_float = float(m["ts"])
+        dt = datetime.fromtimestamp(ts_float, tz=timezone.utc).astimezone()
         weekday[dt.strftime("%A")] += 1
         hourly[dt.hour] += 1
         monthly[dt.strftime("%Y-%m")] += 1
-        timestamps.append(float(m["ts"]))
+        timestamps.append(ts_float)
+        active_dates_set.add(dt.date())
+
+    active_dates = sorted(active_dates_set)
 
     span_days = 0
     if len(timestamps) >= 2:
@@ -206,11 +217,6 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         span_days = (last_dt - first_dt).days + 1
 
     # --- Conversation Streaks ---
-    # Build set of active dates from sorted_msgs
-    active_dates = sorted({
-        datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()
-        for m in sorted_msgs
-    })
 
     longest_streak_days = 0
     longest_streak_start_ts = 0.0
@@ -316,7 +322,8 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     your_text_emoji_counter: Counter[str] = Counter()
     their_text_emoji_counter: Counter[str] = Counter()
     for m in user_msgs:
-        emojis = _extract_text_emojis(m.get("text", ""))
+        cleaned = _cleaned_texts[m["ts"]]
+        emojis = _EMOJI_EXTRACT_RE.findall(cleaned)
         if m["user"] == user_id:
             your_text_emoji_counter.update(emojis)
         else:
@@ -344,7 +351,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     response_time_by_hour: dict[int, int] = {}
     for hour, times in sorted(response_by_hour.items()):
         if len(times) >= 3:
-            response_time_by_hour[hour] = _median(times)
+            response_time_by_hour[hour] = median(times)
 
     # --- Links & Files ---
     your_links = sum(len(_LINK_RE.findall(m.get("text", ""))) for m in you_msgs)
@@ -362,10 +369,11 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
 
     # --- Trend Analysis ---
     now = date.today()
-    last_30d = [m for m in sorted_msgs if (now - datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()).days < 30]
-    prev_30d = [m for m in sorted_msgs if 30 <= (now - datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone().date()).days < 60]
-    trend_last_30d = len(last_30d)
-    trend_prev_30d = len(prev_30d)
+    now_ts = datetime.now(tz=timezone.utc).timestamp()
+    cutoff_30d = now_ts - 30 * 86400
+    cutoff_60d = now_ts - 60 * 86400
+    trend_last_30d = sum(1 for t in timestamps if t >= cutoff_30d)
+    trend_prev_30d = sum(1 for t in timestamps if cutoff_60d <= t < cutoff_30d)
     trend_30d_pct = round((trend_last_30d - trend_prev_30d) / trend_prev_30d * 100, 1) if trend_prev_30d > 0 else None
 
     current_month = now.strftime("%Y-%m")
@@ -430,6 +438,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "their_links_shared": their_links,
         "your_files_shared": your_files,
         "their_files_shared": their_files,
+        "_user_id": user_id,
     }
 
 
@@ -464,23 +473,13 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
         lines.append("")
         lines.append("Trends")
         lines.append("-" * 50)
-        pct_30d = stats.get("trend_30d_pct_change")
-        if pct_30d is None:
-            pct_30d_str = "(no prior data)"
-        else:
-            pct_30d_str = f"+{pct_30d}%" if pct_30d >= 0 else f"{pct_30d}%"
+        pct_30d_str = format_pct_change(stats.get("trend_30d_pct_change"))
         lines.append(f"  Last 30 days:     {stats['trend_last_30d_count']:,} messages ({pct_30d_str} vs previous 30d)")
-        pct_yoy = stats.get("trend_yoy_pct_change")
-        if pct_yoy is None:
-            pct_yoy_str = "(no prior data)"
-        else:
-            pct_yoy_str = f"+{pct_yoy}%" if pct_yoy >= 0 else f"{pct_yoy}%"
-        current_month_label = stats.get("trend_current_month", "")
-        try:
-            current_month_display = datetime.strptime(current_month_label, "%Y-%m").strftime("%b %Y") if current_month_label else ""
-        except ValueError:
-            current_month_display = current_month_label
-        lines.append(f"  {current_month_display + ':':<16} {stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {datetime.strptime(stats['trend_yoy_month'], '%Y-%m').strftime('%b %Y') if stats.get('trend_yoy_month') else 'prior year'})")
+        pct_yoy_str = format_pct_change(stats.get("trend_yoy_pct_change"))
+        current_month_display = format_month_label(stats.get("trend_current_month", ""))
+        yoy_label = stats.get("trend_yoy_month", "")
+        yoy_display = format_month_label(yoy_label) if yoy_label else "prior year"
+        lines.append(f"  {current_month_display + ':':<16} {stats['trend_current_month_count']:,} messages ({pct_yoy_str} vs {yoy_display})")
 
     # Thread Activity
     if stats.get("top_level_messages") is not None or stats.get("thread_messages"):
@@ -625,8 +624,7 @@ def format_message_report(stats: dict, channel_label: str, your_name: str = "You
     # Day of week
     weekday = stats.get("weekday_breakdown", {})
     if weekday:
-        day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        sorted_days = sorted(weekday.items(), key=lambda x: day_order.index(x[0]) if x[0] in day_order else 7)
+        sorted_days = sorted(weekday.items(), key=lambda x: DAY_ORDER.index(x[0]) if x[0] in DAY_ORDER else 7)
         lines.append("")
         lines.append("By Day of Week")
         lines.append("-" * 50)

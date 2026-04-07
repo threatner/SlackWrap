@@ -91,11 +91,8 @@ class SlackClient:
 
     def _get_endpoint_count(self, endpoint: str) -> int:
         now = time.time()
-        if endpoint not in self._endpoint_timestamps:
-            self._endpoint_timestamps[endpoint] = []
-        self._endpoint_timestamps[endpoint] = [
-            t for t in self._endpoint_timestamps[endpoint] if now - t < 60
-        ]
+        timestamps = self._endpoint_timestamps.setdefault(endpoint, [])
+        self._endpoint_timestamps[endpoint] = [t for t in timestamps if now - t < 60]
         return len(self._endpoint_timestamps[endpoint])
 
     def _throttle_if_needed(self, endpoint: str):
@@ -134,9 +131,7 @@ class SlackClient:
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
         # Record this request
-        if endpoint not in self._endpoint_timestamps:
-            self._endpoint_timestamps[endpoint] = []
-        self._endpoint_timestamps[endpoint].append(time.time())
+        self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())
 
         resp.raise_for_status()
         data = resp.json()
@@ -264,16 +259,9 @@ class SlackClient:
         return messages
 
     def fetch_huddles(self, channel_id: str) -> list[dict]:
+        from src.report import extract_huddles
         messages = self.fetch_messages(channel_id)
-        huddles = []
-        for msg in messages:
-            if msg.get("subtype") != "huddle_thread":
-                continue
-            room = msg.get("room", {})
-            if not room.get("has_ended"):
-                continue
-            huddles.append(msg)
-        return huddles
+        return extract_huddles(messages)
 
     def list_all_channels(self) -> list[dict]:
         channels = []

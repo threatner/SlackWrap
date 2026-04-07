@@ -68,12 +68,12 @@ def fetch_with_cache(
         new_msgs = [CacheManager.trim_message(m) for m in new_raw if m.get("ts") not in existing_ts]
         if new_msgs:
             latest_new_ts = max(m["ts"] for m in new_msgs)
-            cache.append(channel_id, new_msgs, last_ts=latest_new_ts)
+            merged = cache.append(channel_id, new_msgs, last_ts=latest_new_ts)
             print(f"{prefix}+{len(new_msgs):,} new messages")
         else:
+            merged = cached["messages"]
             print(f"{prefix}Up to date")
-        updated = cache.load(channel_id)
-        return updated["messages"]
+        return merged
     else:
         print(f"{prefix}No cache, fetching all...")
         raw = client.fetch_messages(channel_id, include_threads=True)
@@ -233,7 +233,7 @@ def main(argv: list[str] | None = None):
     elif analytics_choice == "3":
         print(format_combined_report(h_stats, m_stats, sources_label, your_name, their_name))
     else:
-        print(format_report(h_stats, sources_label, client.resolve_user_name, your_name, their_name))
+        print(format_report(h_stats, sources_label, your_name, their_name))
 
     # HTML report
     html_path = generate_html_report(h_stats, m_stats, sources_label, your_name, their_name)
