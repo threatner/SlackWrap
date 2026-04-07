@@ -96,7 +96,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
             "you_initiated": 0, "them_initiated": 0,
             "your_avg_response_seconds": 0, "their_avg_response_seconds": 0,
             "your_median_response_seconds": 0, "their_median_response_seconds": 0,
-            "weekday_breakdown": {}, "hourly_breakdown": {},
+            "weekday_breakdown": {}, "hourly_breakdown": {}, "monthly_breakdown": {},
             "span_days": 0, "first_ts": 0, "last_ts": 0,
             "longest_streak_days": 0, "longest_streak_start": 0, "longest_streak_end": 0,
             "current_streak_days": 0,
@@ -162,11 +162,13 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
     # Time breakdowns
     weekday: Counter[str] = Counter()
     hourly: Counter[int] = Counter()
+    monthly: Counter[str] = Counter()
     timestamps = []
     for m in sorted_msgs:
         dt = datetime.fromtimestamp(float(m["ts"]), tz=timezone.utc).astimezone()
         weekday[dt.strftime("%A")] += 1
         hourly[dt.hour] += 1
+        monthly[dt.strftime("%Y-%m")] += 1
         timestamps.append(float(m["ts"]))
 
     span_days = 0
@@ -298,6 +300,7 @@ def compute_message_stats(messages: list[dict], user_id: str, target_user_id: st
         "their_median_response_seconds": their_median_resp,
         "weekday_breakdown": dict(weekday),
         "hourly_breakdown": dict(sorted(hourly.items())),
+        "monthly_breakdown": dict(sorted(monthly.items())),
         "span_days": span_days,
         "first_ts": timestamps[0] if timestamps else 0,
         "last_ts": timestamps[-1] if timestamps else 0,

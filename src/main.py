@@ -7,6 +7,7 @@ from src.slack_client import SlackClient
 from src.report import extract_huddles, compute_stats, format_report
 from src.message_analytics import compute_message_stats, format_message_report
 from src.combined_report import format_combined_report
+from src.html_report import generate_html_report
 
 
 def build_search_results(
@@ -212,18 +213,28 @@ def main(argv: list[str] | None = None):
     their_name = target_name if is_dm else "Them"
     filter_target = target_user_id if extra_channels else None
 
-    if analytics_choice == "2":
-        stats = compute_message_stats(all_messages, user_id, filter_target)
-        print(format_message_report(stats, sources_label, your_name, their_name))
-    elif analytics_choice == "3":
+    # Compute stats based on choice
+    h_stats = None
+    m_stats = None
+
+    if analytics_choice in ("1", "3"):
         huddles = extract_huddles(all_messages)
         h_stats = compute_stats(huddles, user_id, filter_target)
+
+    if analytics_choice in ("2", "3"):
         m_stats = compute_message_stats(all_messages, user_id, filter_target)
+
+    # Console output
+    if analytics_choice == "2":
+        print(format_message_report(m_stats, sources_label, your_name, their_name))
+    elif analytics_choice == "3":
         print(format_combined_report(h_stats, m_stats, sources_label, your_name, their_name))
     else:
-        huddles = extract_huddles(all_messages)
-        stats = compute_stats(huddles, user_id, filter_target)
-        print(format_report(stats, sources_label, client.resolve_user_name, your_name, their_name))
+        print(format_report(h_stats, sources_label, client.resolve_user_name, your_name, their_name))
+
+    # HTML report
+    html_path = generate_html_report(h_stats, m_stats, sources_label, your_name, their_name)
+    print(f"  HTML report saved to: {html_path}")
 
 
 if __name__ == "__main__":
