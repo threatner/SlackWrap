@@ -18,6 +18,7 @@ ENDPOINT_TIERS = {
     "users.info": 4,
     "conversations.list": 2,
     "conversations.history": 3,
+    "conversations.replies": 3,
     "conversations.members": 4,
     "auth.test": 4,
 }
@@ -210,7 +211,23 @@ class SlackClient:
         _clear_status()
         return matches
 
-    def fetch_messages(self, channel_id: str, oldest: str | None = None) -> list[dict]:
+    def fetch_thread_replies(self, channel_id: str, thread_ts: str) -> list[dict]:
+        replies = []
+        cursor = ""
+        while True:
+            params = {"channel": channel_id, "ts": thread_ts, "limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.replies", params)
+            replies.extend(data.get("messages", []))
+            if not data.get("has_more"):
+                break
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        return replies
+
+    def fetch_messages(self, channel_id: str, oldest: str | None = None, include_threads: bool = False) -> list[dict]:
         messages = []
         cursor = ""
         page = 0
@@ -229,6 +246,19 @@ class SlackClient:
             cursor = data.get("response_metadata", {}).get("next_cursor", "")
             if not cursor:
                 break
+
+        if include_threads:
+            thread_parents = [m for m in messages if m.get("reply_count", 0) > 0]
+            if thread_parents:
+                existing_ts = {m["ts"] for m in messages}
+                for i, parent in enumerate(thread_parents):
+                    _print_status(f"Fetching threads... ({i+1}/{len(thread_parents)}, {len(messages):,} total)")
+                    replies = self.fetch_thread_replies(channel_id, parent["ts"])
+                    for reply in replies:
+                        if reply["ts"] not in existing_ts:
+                            messages.append(reply)
+                            existing_ts.add(reply["ts"])
+
         _clear_status()
         return messages
 

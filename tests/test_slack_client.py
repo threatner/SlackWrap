@@ -227,6 +227,65 @@ class TestFetchMessages:
         assert len(messages) == 2
 
 
+class TestFetchThreadReplies:
+    def test_fetches_replies(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        replies_response = {
+            "ok": True,
+            "messages": [
+                {"type": "message", "user": "U001", "ts": "1.0", "text": "parent", "thread_ts": "1.0"},
+                {"type": "message", "user": "U_ME", "ts": "1.5", "text": "reply", "thread_ts": "1.0"},
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(replies_response)):
+            replies = client.fetch_thread_replies("C12345", "1.0")
+        assert len(replies) == 2
+
+
+class TestFetchMessagesWithThreads:
+    def test_includes_thread_replies(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        history_response = {
+            "ok": True,
+            "messages": [
+                {"type": "message", "user": "U001", "ts": "1.0", "text": "start thread", "reply_count": 1, "thread_ts": "1.0"},
+                {"type": "message", "user": "U_ME", "ts": "2.0", "text": "no thread"},
+            ],
+            "has_more": False,
+        }
+        replies_response = {
+            "ok": True,
+            "messages": [
+                {"type": "message", "user": "U001", "ts": "1.0", "text": "start thread", "thread_ts": "1.0"},
+                {"type": "message", "user": "U_ME", "ts": "1.5", "text": "reply in thread", "thread_ts": "1.0"},
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", side_effect=[
+            _mock_response(history_response),
+            _mock_response(replies_response),
+        ]):
+            messages = client.fetch_messages("C12345", include_threads=True)
+        # 2 from history + 1 new reply (1.0 is deduped)
+        assert len(messages) == 3
+        reply_texts = {m["text"] for m in messages}
+        assert "reply in thread" in reply_texts
+
+    def test_without_threads_skips_replies(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        history_response = {
+            "ok": True,
+            "messages": [
+                {"type": "message", "user": "U001", "ts": "1.0", "text": "thread parent", "reply_count": 2},
+            ],
+            "has_more": False,
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(history_response)):
+            messages = client.fetch_messages("C12345", include_threads=False)
+        assert len(messages) == 1
+
+
 class TestResolveUserName:
     def test_prefers_display_name(self):
         client = SlackClient(token="xoxp-fake", user_id="U_ME")

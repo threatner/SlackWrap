@@ -54,14 +54,14 @@ def fetch_with_cache(
 
     if not use_cache:
         print(f"{prefix}(cache disabled)")
-        raw = client.fetch_messages(channel_id)
+        raw = client.fetch_messages(channel_id, include_threads=True)
         return [CacheManager.trim_message(m) for m in raw]
 
     cached = cache.load(channel_id)
     if cached is not None:
         last_ts = cached["last_ts"]
         print(f"{prefix}Cache: {len(cached['messages']):,} msgs, fetching new...")
-        new_raw = client.fetch_messages(channel_id, oldest=last_ts)
+        new_raw = client.fetch_messages(channel_id, oldest=last_ts, include_threads=True)
         existing_ts = {m["ts"] for m in cached["messages"]}
         new_msgs = [CacheManager.trim_message(m) for m in new_raw if m.get("ts") not in existing_ts]
         if new_msgs:
@@ -73,7 +73,7 @@ def fetch_with_cache(
         return updated["messages"]
     else:
         print(f"{prefix}No cache, fetching all...")
-        raw = client.fetch_messages(channel_id)
+        raw = client.fetch_messages(channel_id, include_threads=True)
         trimmed = [CacheManager.trim_message(m) for m in raw]
         if trimmed:
             latest_ts = trimmed[0]["ts"]
