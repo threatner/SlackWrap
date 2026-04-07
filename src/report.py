@@ -19,6 +19,18 @@ def format_duration(seconds: int) -> str:
     return " ".join(parts) if parts else "0m"
 
 
+def extract_huddles(messages: list[dict]) -> list[dict]:
+    huddles = []
+    for msg in messages:
+        if msg.get("subtype") != "huddle_thread":
+            continue
+        room = msg.get("room", {})
+        if not room.get("has_ended"):
+            continue
+        huddles.append(msg)
+    return huddles
+
+
 def compute_stats(huddles: list[dict], user_id: str) -> dict:
     user_huddles = [
         h for h in huddles

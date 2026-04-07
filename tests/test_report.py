@@ -1,4 +1,4 @@
-from src.report import format_duration, compute_stats, format_report
+from src.report import format_duration, compute_stats, format_report, extract_huddles
 
 
 class TestFormatDuration:
@@ -103,3 +103,28 @@ class TestFormatReport:
         output = format_report(stats, "DM with Alice", lambda uid: uid)
 
         assert "No huddles found" in output
+
+
+class TestExtractHuddles:
+    def test_extracts_ended_huddles(self):
+        messages = [
+            {"user": "U001", "ts": "1.0", "text": "hello", "subtype": None},
+            {"user": None, "ts": "2.0", "text": "", "subtype": "huddle_thread", "room": {
+                "date_start": 1000, "date_end": 2000, "has_ended": True,
+                "participant_history": ["U001", "U002"], "created_by": "U001",
+            }},
+            {"user": "U002", "ts": "3.0", "text": "bye", "subtype": None},
+        ]
+        huddles = extract_huddles(messages)
+        assert len(huddles) == 1
+        assert huddles[0]["room"]["date_start"] == 1000
+
+    def test_skips_ongoing_huddles(self):
+        messages = [
+            {"user": None, "ts": "1.0", "text": "", "subtype": "huddle_thread", "room": {
+                "date_start": 1000, "date_end": 0, "has_ended": False,
+                "participant_history": ["U001"], "created_by": "U001",
+            }},
+        ]
+        huddles = extract_huddles(messages)
+        assert len(huddles) == 0
