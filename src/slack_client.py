@@ -3,8 +3,22 @@ import time
 import requests
 
 API_BASE = "https://slack.com/api"
-THROTTLE_AFTER = 30  # start throttling after this many requests per minute
-THROTTLE_DELAY = 1.2  # seconds to wait when throttling
+
+# Slack rate limits per method tier (requests per minute)
+# We use slightly below the documented minimum to avoid 429s
+TIER_LIMITS = {
+    2: {"max": 18, "label": "Tier 2"},   # Slack says 20+
+    3: {"max": 45, "label": "Tier 3"},   # Slack says 50+
+    4: {"max": 90, "label": "Tier 4"},   # Slack says 100+
+}
+
+# Map endpoints to their tier
+ENDPOINT_TIERS = {
+    "users.list": 2,
+    "users.info": 4,
+    "conversations.list": 2,
+    "conversations.history": 3,
+}
 
 
 class _StatusDisplay:
@@ -17,11 +31,9 @@ class _StatusDisplay:
 
     def _render(self):
         if not self._active:
-            # First render: print both lines
             sys.stderr.write(f"  {self._progress}\n  {self._throttle}")
             self._active = True
         else:
-            # Move up 1 line, clear, write progress, move down, clear, write throttle
             sys.stderr.write(f"\033[A\r\033[K  {self._progress}\n\r\033[K  {self._throttle}")
         sys.stderr.flush()
 
@@ -35,7 +47,6 @@ class _StatusDisplay:
 
     def clear(self):
         if self._active:
-            # Clear both lines
             sys.stderr.write(f"\033[A\r\033[K\r\033[K")
             sys.stderr.flush()
             self._active = False
@@ -60,31 +71,57 @@ class SlackClient:
         self.user_id = user_id
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
-        self._request_timestamps: list[float] = []
+        # Per-endpoint request timestamp tracking
+        self._endpoint_timestamps: dict[str, list[float]] = {}
 
-    def _throttle_if_needed(self):
+    def _get_endpoint_count(self, endpoint: str) -> int:
         now = time.time()
-        self._request_timestamps = [t for t in self._request_timestamps if now - t < 60]
-        req_count = len(self._request_timestamps)
-        if req_count >= THROTTLE_AFTER:
-            _display.update_throttle(f"[throttle] {req_count} req/60s — pausing {THROTTLE_DELAY}s")
-            time.sleep(THROTTLE_DELAY)
-        elif req_count > 0:
-            _display.update_throttle(f"[requests] {req_count}/{THROTTLE_AFTER} in last 60s")
+        if endpoint not in self._endpoint_timestamps:
+            self._endpoint_timestamps[endpoint] = []
+        self._endpoint_timestamps[endpoint] = [
+            t for t in self._endpoint_timestamps[endpoint] if now - t < 60
+        ]
+        return len(self._endpoint_timestamps[endpoint])
+
+    def _throttle_if_needed(self, endpoint: str):
+        tier = ENDPOINT_TIERS.get(endpoint, 3)
+        tier_info = TIER_LIMITS[tier]
+        max_req = tier_info["max"]
+
+        count = self._get_endpoint_count(endpoint)
+
+        if count >= max_req:
+            # Calculate exact wait: when will the oldest request in window expire?
+            oldest_ts = self._endpoint_timestamps[endpoint][0]
+            wait = 60.0 - (time.time() - oldest_ts) + 0.1  # +0.1s buffer
+            if wait > 0:
+                _display.update_throttle(
+                    f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s for window to free up"
+                )
+                time.sleep(wait)
+                # After waiting, clean up expired timestamps
+                self._get_endpoint_count(endpoint)
         else:
-            _display.update_throttle("")
+            _display.update_throttle(f"[{tier_info['label']}] {count}/{max_req} req/min")
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
-        self._throttle_if_needed()
+        self._throttle_if_needed(endpoint)
         resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
-        if resp.status_code == 429:
+        # Handle 429 with retry loop
+        while resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", 5))
             _display.update_throttle(f"[rate-limited] Slack said wait {retry_after}s...")
             time.sleep(retry_after)
+            # Clean up old timestamps after waiting
+            self._get_endpoint_count(endpoint)
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {})
 
-        self._request_timestamps.append(time.time())
+        # Record this request
+        if endpoint not in self._endpoint_timestamps:
+            self._endpoint_timestamps[endpoint] = []
+        self._endpoint_timestamps[endpoint].append(time.time())
+
         resp.raise_for_status()
         data = resp.json()
         if not data.get("ok"):
@@ -161,8 +198,8 @@ class SlackClient:
         page = 0
         while True:
             page += 1
-            _print_status(f"Fetching messages... (page {page}, {len(messages)} fetched)")
-            params = {"channel": channel_id, "limit": 200}
+            _print_status(f"Fetching messages... (page {page}, {len(messages):,} fetched)")
+            params = {"channel": channel_id, "limit": 999}
             if oldest:
                 params["oldest"] = oldest
             if cursor:
