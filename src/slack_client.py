@@ -1,8 +1,19 @@
+import sys
 import time
 import requests
 
 API_BASE = "https://slack.com/api"
 RATE_LIMIT_DELAY = 1.2  # seconds between paginated requests
+
+
+def _print_status(msg: str):
+    sys.stderr.write(f"\r\033[K  {msg}")
+    sys.stderr.flush()
+
+
+def _clear_status():
+    sys.stderr.write("\r\033[K")
+    sys.stderr.flush()
 
 
 class SlackClient:
@@ -24,7 +35,10 @@ class SlackClient:
         query_lower = query.lower()
         matches = []
         cursor = ""
+        page = 0
         while True:
+            page += 1
+            _print_status(f"Searching users... (page {page}, {len(matches)} found)")
             params = {"limit": 200}
             if cursor:
                 params["cursor"] = cursor
@@ -40,12 +54,16 @@ class SlackClient:
             if not cursor:
                 break
             time.sleep(RATE_LIMIT_DELAY)
+        _clear_status()
         return matches
 
     def list_dm_channels(self) -> list[dict]:
         channels = []
         cursor = ""
+        page = 0
         while True:
+            page += 1
+            _print_status(f"Loading DM channels... (page {page}, {len(channels)} loaded)")
             params = {"types": "im", "limit": 200}
             if cursor:
                 params["cursor"] = cursor
@@ -55,13 +73,17 @@ class SlackClient:
             if not cursor:
                 break
             time.sleep(RATE_LIMIT_DELAY)
+        _clear_status()
         return channels
 
     def search_channels(self, query: str) -> list[dict]:
         query_lower = query.lower()
         matches = []
         cursor = ""
+        page = 0
         while True:
+            page += 1
+            _print_status(f"Searching channels... (page {page}, {len(matches)} found)")
             params = {"types": "public_channel,private_channel", "limit": 200}
             if cursor:
                 params["cursor"] = cursor
@@ -73,17 +95,23 @@ class SlackClient:
             if not cursor:
                 break
             time.sleep(RATE_LIMIT_DELAY)
+        _clear_status()
         return matches
 
     def fetch_huddles(self, channel_id: str) -> list[dict]:
         huddles = []
         cursor = ""
+        page = 0
+        messages_scanned = 0
         while True:
+            page += 1
+            _print_status(f"Scanning messages... (page {page}, {messages_scanned} scanned, {len(huddles)} huddles found)")
             params = {"channel": channel_id, "limit": 200}
             if cursor:
                 params["cursor"] = cursor
             data = self._get("conversations.history", params)
             for msg in data.get("messages", []):
+                messages_scanned += 1
                 if msg.get("subtype") != "huddle_thread":
                     continue
                 room = msg.get("room", {})
@@ -96,6 +124,7 @@ class SlackClient:
             if not cursor:
                 break
             time.sleep(RATE_LIMIT_DELAY)
+        _clear_status()
         return huddles
 
     def resolve_user_name(self, user_id: str) -> str:
