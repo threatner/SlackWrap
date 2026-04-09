@@ -124,3 +124,46 @@ def test_upsert_message(db):
     rows = db.execute("SELECT * FROM messages WHERE slack_ts = ?", ("1700000000.000001",)).fetchall()
     assert len(rows) == 1
     assert rows[0]["text"] == "hello edited"
+
+
+def test_fts_search_finds_message(db):
+    db.upsert_channel(slack_id="C1", name="general", type="channel")
+    db.upsert_user(slack_id="U1", name="alice")
+    db.commit()
+
+    ch_id = db.get_channel_id("C1")
+    u_id = db.get_user_id("U1")
+
+    db.upsert_message(channel_id=ch_id, user_id=u_id, slack_ts="1.0",
+                       text="let's discuss the deployment plan", created_at=1700000000.0)
+    db.upsert_message(channel_id=ch_id, user_id=u_id, slack_ts="2.0",
+                       text="the weather is nice today", created_at=1700000001.0)
+    db.commit()
+
+    results = db.execute(
+        "SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?", ("deployment",)
+    ).fetchall()
+    assert len(results) == 1
+
+
+def test_fts_updated_on_message_update(db):
+    db.upsert_channel(slack_id="C1", name="general", type="channel")
+    db.upsert_user(slack_id="U1", name="alice")
+    db.commit()
+
+    ch_id = db.get_channel_id("C1")
+    u_id = db.get_user_id("U1")
+
+    db.upsert_message(channel_id=ch_id, user_id=u_id, slack_ts="1.0",
+                       text="original text about cats", created_at=1700000000.0)
+    db.commit()
+
+    # Update the message text
+    db.upsert_message(channel_id=ch_id, user_id=u_id, slack_ts="1.0",
+                       text="edited text about dogs", created_at=1700000000.0)
+    db.commit()
+
+    cats = db.execute("SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?", ("cats",)).fetchall()
+    dogs = db.execute("SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?", ("dogs",)).fetchall()
+    assert len(cats) == 0
+    assert len(dogs) == 1

@@ -153,6 +153,19 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     text, content=messages, content_rowid=id
 );
 
+CREATE TRIGGER IF NOT EXISTS messages_fts_insert AFTER INSERT ON messages BEGIN
+    INSERT INTO messages_fts(rowid, text) VALUES (new.id, new.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_fts_update AFTER UPDATE OF text ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
+    INSERT INTO messages_fts(rowid, text) VALUES (new.id, new.text);
+END;
+
+CREATE TRIGGER IF NOT EXISTS messages_fts_delete AFTER DELETE ON messages BEGIN
+    INSERT INTO messages_fts(messages_fts, rowid, text) VALUES ('delete', old.id, old.text);
+END;
+
 CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages(channel_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_user_channel ON messages(user_id, channel_id);
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(channel_id, thread_ts);
