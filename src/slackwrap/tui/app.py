@@ -25,6 +25,7 @@ class SlackWrapApp(App):
         self.selected_user_name: str = ""
         self.you_db_id: int | None = None
         self.them_db_id: int | None = None
+        self._chat_engine = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -51,6 +52,17 @@ class SlackWrapApp(App):
         import webbrowser
         webbrowser.open(f"{self._web_server.url}/story")
         self.notify(f"Web view: {self._web_server.url}")
+
+    def get_chat_engine(self):
+        if self._chat_engine is None and self.you_db_id and self.them_db_id:
+            from slackwrap.ai.ollama_client import OllamaClient
+            from slackwrap.ai.chat_engine import ChatEngine
+            ollama = OllamaClient()
+            self._chat_engine = ChatEngine(
+                db=self.db, ollama=ollama, you_id=self.you_db_id, them_id=self.them_db_id,
+                your_name="You", their_name=self.selected_user_name or "Them",
+            )
+        return self._chat_engine
 
     def action_open_chat(self) -> None:
         from slackwrap.tui.screens.chat import ChatScreen
