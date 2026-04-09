@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Your Story{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>{{ your_name }} &amp; {{ their_name }}</h1>
+    <p>Your Wrapped Story</p>
+</div>
+
+<!-- Hero Grid -->
+<div class="hero-grid">
+    <div class="card hero-card">
+        <div class="stat-value">{{ "{:,}".format(volume.total_messages) }}</div>
+        <div class="stat-label">Messages</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ huddles.total_huddles }}</div>
+        <div class="stat-label">Huddles</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ streaks.longest_streak_days }}d</div>
+        <div class="stat-label">Best Streak</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ volume.active_days }}</div>
+        <div class="stat-label">Active Days</div>
+    </div>
+</div>
+
+<!-- Chapter 1: Your Year Together -->
+<section class="chapter">
+    <h2>Chapter 1 — Your Year Together</h2>
+    <div class="card">
+        <div class="stat-row">
+            <span class="label">Period</span>
+            <span class="value">{{ volume.total_days }} days</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Total Messages</span>
+            <span class="value">{{ "{:,}".format(volume.total_messages) }}</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Huddle Time</span>
+            <span class="value">{{ format_duration(huddles.total_seconds) }}</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Active Days</span>
+            <span class="value">{{ volume.active_days }} of {{ volume.total_days }}</span>
+        </div>
+    </div>
+</section>
+
+<!-- Chapter 2: By the Numbers -->
+<section class="chapter">
+    <h2>Chapter 2 — By the Numbers</h2>
+    <div class="card">
+        <div class="stat-row">
+            <span class="label">{{ your_name }}</span>
+            <span class="value">{{ "{:,}".format(volume.you_count) }} ({{ "%.1f"|format(volume.you_pct) }}%)</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">{{ their_name }}</span>
+            <span class="value">{{ "{:,}".format(volume.them_count) }} ({{ "%.1f"|format(volume.them_pct) }}%)</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Per Week</span>
+            <span class="value">{{ "%.1f"|format(volume.per_week) }}</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Busiest Day</span>
+            <span class="value">{{ volume.busiest_day_date }} ({{ volume.busiest_day_count }} msgs)</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Threads</span>
+            <span class="value">{{ threads.in_threads }} in-thread ({{ "%.1f"|format(threads.thread_pct) }}%)</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Weekend vs Weekday</span>
+            <span class="value">{{ volume.weekend_count }} / {{ volume.weekday_count }}</span>
+        </div>
+    </div>
+</section>
+
+<!-- Chapter 3: Your Rhythm -->
+<section class="chapter">
+    <h2>Chapter 3 — Your Rhythm</h2>
+    <div class="chart-grid">
+        <div class="card">
+            <h3 class="card-title">Activity by Day of Week</h3>
+            <div class="chart-container">
+                <canvas id="dayOfWeekChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">Response Time Medians</h3>
+            <div class="stat-row">
+                <span class="label">{{ your_name }}</span>
+                <span class="value">{{ format_duration(response_times.your_median) }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">{{ their_name }}</span>
+                <span class="value">{{ format_duration(response_times.their_median) }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Fastest Hour</span>
+                <span class="value">{{ response_times.fastest_hour }}:00</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Slowest Hour</span>
+                <span class="value">{{ response_times.slowest_hour }}:00</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Chapter 4: How You Communicate -->
+<section class="chapter">
+    <h2>Chapter 4 — How You Communicate</h2>
+    <div class="chart-grid">
+        <div class="card">
+            <h3 class="card-title">Word Counts</h3>
+            <div class="stat-row">
+                <span class="label">{{ your_name }} avg words</span>
+                <span class="value">{{ "%.1f"|format(comm.your_avg_words) }}</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">{{ their_name }} avg words</span>
+                <span class="value">{{ "%.1f"|format(comm.their_avg_words) }}</span>
+            </div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">Top Words — {{ your_name }}</h3>
+            {% for word, count in comm.your_top_words[:5] %}
+            <div class="stat-row">
+                <span class="label">{{ word }}</span>
+                <span class="value">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <h3 class="card-title">Top Words — {{ their_name }}</h3>
+            {% for word, count in comm.their_top_words[:5] %}
+            <div class="stat-row">
+                <span class="label">{{ word }}</span>
+                <span class="value">{{ count }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card">
+            <h3 class="card-title">Emoji Usage</h3>
+            <div class="stat-row">
+                <span class="label">{{ your_name }} emojis</span>
+                <span class="value">{{ comm.your_emoji_total }} (diversity: {{ comm.emoji_diversity_you }})</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">{{ their_name }} emojis</span>
+                <span class="value">{{ comm.their_emoji_total }} (diversity: {{ comm.emoji_diversity_them }})</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Chapter 5: Highlights -->
+<section class="chapter">
+    <h2>Chapter 5 — Highlights</h2>
+    <div class="card">
+        {% if relationship.first_message %}
+        <div class="stat-row">
+            <span class="label">First Message</span>
+            <span class="value">{{ relationship.first_message.get("text", "N/A") | truncate(80) }}</span>
+        </div>
+        {% endif %}
+        {% if relationship.last_message %}
+        <div class="stat-row">
+            <span class="label">Last Message</span>
+            <span class="value">{{ relationship.last_message.get("text", "N/A") | truncate(80) }}</span>
+        </div>
+        {% endif %}
+        <div class="stat-row">
+            <span class="label">Pinned Messages</span>
+            <span class="value">{{ relationship.pinned_highlights | length }}</span>
+        </div>
+    </div>
+</section>
+
+<!-- Chapter 6: Your Streaks -->
+<section class="chapter">
+    <h2>Chapter 6 — Your Streaks</h2>
+    <div class="card">
+        <div class="stat-row">
+            <span class="label">Longest Streak</span>
+            <span class="value">{{ streaks.longest_streak_days }} days</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Current Streak</span>
+            <span class="value">{{ streaks.current_streak_days }} days</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">Longest Silence</span>
+            <span class="value">{{ format_duration(streaks.longest_gap_seconds) }}</span>
+        </div>
+        {% if streaks.milestones %}
+        <h3 class="card-title" style="margin-top:16px">Milestones</h3>
+        {% for label, date in streaks.milestones.items() %}
+        <div class="stat-row">
+            <span class="label">{{ label }}</span>
+            <span class="value">{{ date }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+</section>
+
+<!-- Chapter 7: Trends -->
+<section class="chapter">
+    <h2>Chapter 7 — Trends</h2>
+    <div class="chart-grid">
+        <div class="card">
+            <h3 class="card-title">Monthly Volume</h3>
+            <div class="chart-container">
+                <canvas id="monthlyVolumeChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h3 class="card-title">30-Day Trend</h3>
+            <div class="stat-row">
+                <span class="label">Last 30 days</span>
+                <span class="value">{{ trends.last_30d_count }} messages</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Previous 30 days</span>
+                <span class="value">{{ trends.prev_30d_count }} messages</span>
+            </div>
+            {% if trends.pct_change_30d is not none %}
+            <div class="stat-row">
+                <span class="label">Change</span>
+                <span class="value {% if trends.pct_change_30d > 0 %}text-success{% elif trends.pct_change_30d < 0 %}text-warning{% endif %}">
+                    {{ "%+.1f"|format(trends.pct_change_30d) }}%
+                </span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<script>
+(function() {
+    const accentLight = '#a29bfe';
+    const accent = '#6c5ce7';
+    const textMuted = '#8b8b9e';
+
+    const chartDefaults = {
+        color: textMuted,
+        borderColor: 'transparent',
+    };
+
+    // Day of Week Chart
+    const heatmapData = {{ heatmap | tojson }};
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayTotals = dayLabels.map(function(_, i) {
+        let total = 0;
+        const dayData = heatmapData.data[String(i)] || {};
+        for (const h in dayData) { total += dayData[h]; }
+        return total;
+    });
+
+    new Chart(document.getElementById('dayOfWeekChart'), {
+        type: 'bar',
+        data: {
+            labels: dayLabels,
+            datasets: [{
+                label: 'Messages',
+                data: dayTotals,
+                backgroundColor: accent,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+
+    // Monthly Volume Chart
+    const monthlyVolumes = {{ volume.monthly_volumes | tojson }};
+    const monthLabels = Object.keys(monthlyVolumes).sort();
+    const monthValues = monthLabels.map(function(k) { return monthlyVolumes[k]; });
+
+    new Chart(document.getElementById('monthlyVolumeChart'), {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Messages',
+                data: monthValues,
+                backgroundColor: accentLight,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted, maxRotation: 45 }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}
