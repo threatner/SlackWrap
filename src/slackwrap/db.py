@@ -181,8 +181,8 @@ CREATE INDEX IF NOT EXISTS idx_monthly_stats_lookup ON monthly_stats(relationshi
 
 
 class Database:
-    def __init__(self, path: str = ":memory:"):
-        self.conn = sqlite3.connect(path)
+    def __init__(self, path: str = ":memory:", check_same_thread: bool = True):
+        self.conn = sqlite3.connect(path, check_same_thread=check_same_thread)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
