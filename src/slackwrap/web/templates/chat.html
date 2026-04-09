@@ -5,26 +5,84 @@
 <div class="chat-layout">
     <div class="page-header">
         <h1>Chat</h1>
-        <p>AI-powered conversation analysis (coming soon)</p>
+        <p>AI-powered conversation analysis with {{ their_name }}</p>
     </div>
 
-    <div class="chat-messages">
+    <div class="chat-messages" id="chatMessages">
+        {% if ollama_available %}
         <div class="chat-bubble them">
-            Hey! I'm the SlackWrap assistant. I can help you explore your conversation
-            data with {{ their_name }} once Ollama integration is ready.
+            Hi! I'm the SlackWrap assistant. Ask me anything about your
+            conversation history with {{ their_name }}.
         </div>
+        {% else %}
         <div class="chat-bubble them">
-            This feature is part of Plan 5 — local AI chat powered by Ollama.
-            Stay tuned!
+            Ollama is not available. Please install it from
+            <a href="https://ollama.ai" target="_blank">ollama.ai</a>
+            and run <code>ollama serve</code> to enable chat.
         </div>
-        <div class="chat-bubble you">
-            Sounds great, can't wait to try it out!
-        </div>
+        {% endif %}
     </div>
 
     <div class="chat-input-bar">
-        <input type="text" placeholder="Chat coming in Plan 5 (Ollama)..." disabled>
-        <button disabled>Send</button>
+        <input type="text" id="chatInput"
+               placeholder="{% if ollama_available %}Ask anything about your Slack history...{% else %}Ollama not available{% endif %}"
+               {% if not ollama_available %}disabled{% endif %}
+               onkeydown="if(event.key==='Enter')sendMessage()">
+        <button id="chatSend" onclick="sendMessage()" {% if not ollama_available %}disabled{% endif %}>Send</button>
     </div>
 </div>
+
+<script>
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+
+function addBubble(text, cls) {
+    var container = document.getElementById('chatMessages');
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble ' + cls;
+    bubble.innerHTML = text;
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+}
+
+async function sendMessage() {
+    var input = document.getElementById('chatInput');
+    var message = input.value.trim();
+    if (!message) return;
+
+    addBubble(escapeHtml(message), 'you');
+    input.value = '';
+    input.disabled = true;
+    document.getElementById('chatSend').disabled = true;
+
+    addBubble('<em>Thinking...</em>', 'them thinking');
+
+    try {
+        var resp = await fetch('/chat/ask', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({message: message})
+        });
+        var data = await resp.json();
+
+        // Remove thinking indicator
+        var thinking = document.querySelector('.chat-bubble.thinking');
+        if (thinking) thinking.remove();
+
+        var cls = data.error ? 'them error' : 'them';
+        addBubble(escapeHtml(data.response).replace(/\n/g, '<br>'), cls);
+    } catch (err) {
+        var thinking = document.querySelector('.chat-bubble.thinking');
+        if (thinking) thinking.remove();
+        addBubble('Failed to reach server: ' + escapeHtml(err.toString()), 'them error');
+    } finally {
+        input.disabled = false;
+        document.getElementById('chatSend').disabled = false;
+        input.focus();
+    }
+}
+</script>
 {% endblock %}
