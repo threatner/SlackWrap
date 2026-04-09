@@ -87,102 +87,111 @@ class SyncEngine:
         )
         self.db.commit()
 
-        # Fetch messages
-        if oldest:
-            raw_messages = self.client.fetch_messages_with_threads(
-                channel_slack_id, oldest=oldest
+        try:
+            # Fetch messages
+            if oldest:
+                raw_messages = self.client.fetch_messages_with_threads(
+                    channel_slack_id, oldest=oldest
+                )
+            else:
+                raw_messages = self.client.fetch_messages_with_threads(channel_slack_id)
+
+            count = 0
+            latest_ts = oldest or ""
+
+            for msg in raw_messages:
+                ts = msg.get("ts", "")
+                user_slack_id = msg.get("user")
+
+                # Ensure user exists in DB
+                user_id = None
+                if user_slack_id:
+                    user_id = self.db.get_user_id(user_slack_id)
+                    if user_id is None:
+                        user_id = self.db.upsert_user(
+                            slack_id=user_slack_id, name=user_slack_id
+                        )
+
+                # Upsert message
+                msg_id = self.db.upsert_message(
+                    channel_id=ch_id,
+                    user_id=user_id,
+                    slack_ts=ts,
+                    text=msg.get("text", ""),
+                    created_at=float(ts.split(".")[0]) if ts else 0.0,
+                    subtype=msg.get("subtype"),
+                    thread_ts=msg.get("thread_ts"),
+                    reply_count=msg.get("reply_count", 0),
+                    files_count=len(msg.get("files", [])),
+                )
+
+                # Extract reactions
+                for reaction in msg.get("reactions", []):
+                    emoji_name = reaction.get("name", "")
+                    for uid in reaction.get("users", []):
+                        r_user_id = self.db.get_user_id(uid)
+                        if r_user_id is None:
+                            r_user_id = self.db.upsert_user(slack_id=uid, name=uid)
+                        self.db.execute(
+                            "INSERT OR IGNORE INTO reactions (message_id, user_id, emoji_name) VALUES (?, ?, ?)",
+                            (msg_id, r_user_id, emoji_name),
+                        )
+
+                # Extract huddles
+                if msg.get("subtype") == "huddle_thread":
+                    room = msg.get("room", {})
+                    if room.get("has_ended"):
+                        created_by = room.get("created_by")
+                        created_by_id = None
+                        if created_by:
+                            created_by_id = self.db.get_user_id(created_by)
+                            if created_by_id is None:
+                                created_by_id = self.db.upsert_user(
+                                    slack_id=created_by, name=created_by
+                                )
+                        participants = room.get("participant_history", [])
+                        started = room.get("date_start", 0)
+                        ended = room.get("date_end", 0)
+                        duration = int(ended - started)
+                        self.db.execute(
+                            """INSERT OR IGNORE INTO huddles
+                               (channel_id, created_by_user_id, started_at, ended_at,
+                                duration_seconds, participant_ids)
+                               VALUES (?, ?, ?, ?, ?, ?)""",
+                            (
+                                ch_id,
+                                created_by_id,
+                                started,
+                                ended,
+                                duration,
+                                json.dumps(participants),
+                            ),
+                        )
+
+                if ts > latest_ts:
+                    latest_ts = ts
+                count += 1
+
+            # Update sync state
+            self.db.execute(
+                """INSERT INTO sync_state (channel_id, last_synced_ts, last_synced_at, status)
+                   VALUES (?, ?, ?, 'complete')
+                   ON CONFLICT(channel_id) DO UPDATE SET
+                       last_synced_ts=excluded.last_synced_ts,
+                       last_synced_at=excluded.last_synced_at,
+                       status='complete'""",
+                (ch_id, latest_ts, time.time()),
             )
-        else:
-            raw_messages = self.client.fetch_messages_with_threads(channel_slack_id)
+            self.db.commit()
+            return count
 
-        count = 0
-        latest_ts = oldest or ""
-
-        for msg in raw_messages:
-            ts = msg.get("ts", "")
-            user_slack_id = msg.get("user")
-
-            # Ensure user exists in DB
-            user_id = None
-            if user_slack_id:
-                user_id = self.db.get_user_id(user_slack_id)
-                if user_id is None:
-                    user_id = self.db.upsert_user(
-                        slack_id=user_slack_id, name=user_slack_id
-                    )
-
-            # Upsert message
-            msg_id = self.db.upsert_message(
-                channel_id=ch_id,
-                user_id=user_id,
-                slack_ts=ts,
-                text=msg.get("text", ""),
-                created_at=float(ts.split(".")[0]) if ts else 0.0,
-                subtype=msg.get("subtype"),
-                thread_ts=msg.get("thread_ts"),
-                reply_count=msg.get("reply_count", 0),
-                files_count=len(msg.get("files", [])),
+        except Exception:
+            self.db.execute(
+                """UPDATE sync_state SET status='error' WHERE channel_id = ?""",
+                (ch_id,),
             )
-
-            # Extract reactions
-            for reaction in msg.get("reactions", []):
-                emoji_name = reaction.get("name", "")
-                for uid in reaction.get("users", []):
-                    r_user_id = self.db.get_user_id(uid)
-                    if r_user_id is None:
-                        r_user_id = self.db.upsert_user(slack_id=uid, name=uid)
-                    self.db.execute(
-                        "INSERT OR IGNORE INTO reactions (message_id, user_id, emoji_name) VALUES (?, ?, ?)",
-                        (msg_id, r_user_id, emoji_name),
-                    )
-
-            # Extract huddles
-            if msg.get("subtype") == "huddle_thread":
-                room = msg.get("room", {})
-                if room.get("has_ended"):
-                    created_by = room.get("created_by")
-                    created_by_id = None
-                    if created_by:
-                        created_by_id = self.db.get_user_id(created_by)
-                        if created_by_id is None:
-                            created_by_id = self.db.upsert_user(
-                                slack_id=created_by, name=created_by
-                            )
-                    participants = room.get("participant_history", [])
-                    started = room.get("date_start", 0)
-                    ended = room.get("date_end", 0)
-                    duration = int(ended - started)
-                    self.db.execute(
-                        """INSERT OR IGNORE INTO huddles
-                           (channel_id, created_by_user_id, started_at, ended_at,
-                            duration_seconds, participant_ids)
-                           VALUES (?, ?, ?, ?, ?, ?)""",
-                        (
-                            ch_id,
-                            created_by_id,
-                            started,
-                            ended,
-                            duration,
-                            json.dumps(participants),
-                        ),
-                    )
-
-            if ts > latest_ts:
-                latest_ts = ts
-            count += 1
-
-        # Update sync state
-        self.db.execute(
-            """INSERT INTO sync_state (channel_id, last_synced_ts, last_synced_at, status)
-               VALUES (?, ?, ?, 'complete')
-               ON CONFLICT(channel_id) DO UPDATE SET
-                   last_synced_ts=excluded.last_synced_ts,
-                   last_synced_at=excluded.last_synced_at,
-                   status='complete'""",
-            (ch_id, latest_ts, time.time()),
-        )
-        self.db.commit()
-        return count
+            self.db.commit()
+            raise
 
     def sync_channel_pins(self, channel_slack_id: str) -> int:
         ch_id = self.db.get_channel_id(channel_slack_id)

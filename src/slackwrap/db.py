@@ -66,7 +66,8 @@ CREATE TABLE IF NOT EXISTS huddles (
     started_at REAL NOT NULL,
     ended_at REAL NOT NULL,
     duration_seconds INTEGER,
-    participant_ids TEXT NOT NULL DEFAULT '[]'
+    participant_ids TEXT NOT NULL DEFAULT '[]',
+    UNIQUE(channel_id, started_at, ended_at)
 );
 
 CREATE TABLE IF NOT EXISTS files (
@@ -85,7 +86,8 @@ CREATE TABLE IF NOT EXISTS pins (
     channel_id INTEGER NOT NULL REFERENCES channels(id),
     user_id INTEGER REFERENCES users(id),
     message_ts TEXT,
-    pinned_at REAL
+    pinned_at REAL,
+    UNIQUE(channel_id, message_ts)
 );
 
 CREATE TABLE IF NOT EXISTS mentions (
