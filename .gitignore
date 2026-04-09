@@ -28,6 +28,8 @@ env/
 
 # Generated reports
 *.html
+!**/web/templates/
+!**/web/templates/**
 
 # Scratch files
 analyze_dm.py

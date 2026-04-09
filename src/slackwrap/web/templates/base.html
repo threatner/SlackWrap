@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SlackWrap{% endblock %}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="brand">
+            <h1 class="brand-name">SlackWrap</h1>
+            <p class="brand-subtitle">{{ your_name }} &amp; {{ their_name }}</p>
+        </div>
+        <nav class="nav-links">
+            <a href="/story" class="nav-link {% if active_page == 'story' %}active{% endif %}">Story</a>
+            <a href="/explore" class="nav-link {% if active_page == 'explore' %}active{% endif %}">Explore</a>
+            <a href="/deep-dives" class="nav-link {% if active_page == 'deep_dives' %}active{% endif %}">Deep Dives</a>
+            <a href="/chat" class="nav-link {% if active_page == 'chat' %}active{% endif %}">Chat</a>
+        </nav>
+    </aside>
+
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
