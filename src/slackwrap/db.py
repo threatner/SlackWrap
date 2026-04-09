@@ -300,6 +300,40 @@ class Database:
         ).fetchone()
         return row["id"]
 
+    def bulk_upsert_messages(self, messages: list[dict]) -> None:
+        self.conn.executemany(
+            """INSERT INTO messages (channel_id, user_id, slack_ts, text, subtype,
+                   thread_ts, reply_count, files_count, created_at)
+               VALUES (:channel_id, :user_id, :slack_ts, :text, :subtype,
+                   :thread_ts, :reply_count, :files_count, :created_at)
+               ON CONFLICT(channel_id, slack_ts) DO UPDATE SET
+                   text=excluded.text, subtype=excluded.subtype,
+                   thread_ts=excluded.thread_ts, reply_count=excluded.reply_count,
+                   files_count=excluded.files_count""",
+            [
+                {
+                    "channel_id": m["channel_id"],
+                    "user_id": m.get("user_id"),
+                    "slack_ts": m["slack_ts"],
+                    "text": m.get("text"),
+                    "subtype": m.get("subtype"),
+                    "thread_ts": m.get("thread_ts"),
+                    "reply_count": m.get("reply_count", 0),
+                    "files_count": m.get("files_count", 0),
+                    "created_at": m.get("created_at", 0.0),
+                }
+                for m in messages
+            ],
+        )
+        self.commit()
+
+    def bulk_insert_reactions(self, reactions: list[dict]) -> None:
+        self.conn.executemany(
+            "INSERT OR IGNORE INTO reactions (message_id, user_id, emoji_name) VALUES (:message_id, :user_id, :emoji_name)",
+            reactions,
+        )
+        self.commit()
+
     def get_user_id(self, slack_id: str) -> int | None:
         row = self.execute(
             "SELECT id FROM users WHERE slack_id = ?", (slack_id,)

@@ -167,3 +167,41 @@ def test_fts_updated_on_message_update(db):
     dogs = db.execute("SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?", ("dogs",)).fetchall()
     assert len(cats) == 0
     assert len(dogs) == 1
+
+
+def test_bulk_upsert_messages(db):
+    ch_id = db.upsert_channel(slack_id="C1", name="general", type="channel")
+    u_id = db.upsert_user(slack_id="U1", name="alice")
+    db.commit()
+
+    messages = [
+        {"channel_id": ch_id, "user_id": u_id, "slack_ts": f"{i}.0",
+         "text": f"msg {i}", "created_at": 1700000000.0 + i}
+        for i in range(100)
+    ]
+    db.bulk_upsert_messages(messages)
+
+    count = db.execute("SELECT COUNT(*) as c FROM messages").fetchone()["c"]
+    assert count == 100
+
+    # FTS should also have all 100
+    fts_count = db.execute("SELECT COUNT(*) as c FROM messages_fts").fetchone()["c"]
+    assert fts_count == 100
+
+
+def test_bulk_insert_reactions(db):
+    ch_id = db.upsert_channel(slack_id="C1", name="general", type="channel")
+    u_id = db.upsert_user(slack_id="U1", name="alice")
+    db.commit()
+    msg_id = db.upsert_message(channel_id=ch_id, user_id=u_id, slack_ts="1.0",
+                                text="hello", created_at=1700000000.0)
+    db.commit()
+
+    reactions = [
+        {"message_id": msg_id, "user_id": u_id, "emoji_name": f"emoji_{i}"}
+        for i in range(10)
+    ]
+    db.bulk_insert_reactions(reactions)
+
+    count = db.execute("SELECT COUNT(*) as c FROM reactions").fetchone()["c"]
+    assert count == 10
