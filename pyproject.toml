@@ -1,6 +1,6 @@
 [project]
 name = "slackwrap"
-version = "1.0.0"
+version = "2.0.0"
 description = "Your Slack year in review — huddle and message analytics"
 readme = "README.md"
 license = {text = "MIT"}
@@ -16,4 +16,7 @@ dev = [
 ]
 
 [project.scripts]
-slackwrap = "src.main:main"
+slackwrap = "slackwrap.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
