@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 
 def test_user_creation():
     from slackwrap.models import User
@@ -83,3 +81,14 @@ def test_sync_state_creation():
 
     s = SyncState(channel_id=1, last_synced_ts="1700000000.000001", last_synced_at=1700000100.0)
     assert s.status == "pending"
+
+
+def test_mention_creation():
+    from slackwrap.models import Mention
+
+    m = Mention(
+        id=1, channel_id=1, from_user_id=1, mentioned_user_id=2,
+        message_ts="1700000000.000001", context_text="Check this @user",
+    )
+    assert m.from_user_id == 1
+    assert m.mentioned_user_id == 2
