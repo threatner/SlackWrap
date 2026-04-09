@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 import pytest
 from unittest.mock import patch, MagicMock
 from slackwrap.slack_client import SlackClient, RateLimiter
@@ -165,3 +164,25 @@ class TestSlackClient:
         shared = client.find_shared_channels("U2")
         shared_ids = {ch["id"] for ch in shared}
         assert shared_ids == {"C2", "C3"}
+
+    @patch("slackwrap.slack_client.time.sleep")
+    @patch("slackwrap.slack_client.requests.get")
+    def test_429_retry_with_retry_after(self, mock_get, mock_sleep):
+        auth_resp = self._mock_response({"ok": True, "user_id": "U1", "user": "test", "team": "T"})
+        rate_limited = self._mock_response({"ok": False, "error": "rate_limited"}, status_code=429)
+        rate_limited.headers = {"Retry-After": "1"}
+        success_resp = self._mock_response({"ok": True, "messages": [], "has_more": False})
+        mock_get.side_effect = [auth_resp, rate_limited, success_resp]
+        client = SlackClient(token="xoxp-test")
+        messages = client.fetch_messages("C12345")
+        assert len(messages) == 0
+        mock_sleep.assert_called()
+
+    @patch("slackwrap.slack_client.requests.get")
+    def test_slack_api_error_raises_runtime_error(self, mock_get):
+        auth_resp = self._mock_response({"ok": True, "user_id": "U1", "user": "test", "team": "T"})
+        error_resp = self._mock_response({"ok": False, "error": "channel_not_found"})
+        mock_get.side_effect = [auth_resp, error_resp]
+        client = SlackClient(token="xoxp-test")
+        with pytest.raises(RuntimeError, match="channel_not_found"):
+            client.fetch_conversation_info("C999")
