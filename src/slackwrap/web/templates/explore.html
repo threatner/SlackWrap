@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Explore{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Explore</h1>
+    <p>Interactive charts for {{ your_name }} &amp; {{ their_name }}</p>
+</div>
+
+<!-- Hero Grid -->
+<div class="hero-grid">
+    <div class="card hero-card">
+        <div class="stat-value">{{ "{:,}".format(volume.total_messages) }}</div>
+        <div class="stat-label">Messages</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ volume.active_days }}</div>
+        <div class="stat-label">Active Days</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ "%.1f"|format(volume.per_week) }}</div>
+        <div class="stat-label">Per Week</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ "%.1f"|format(volume.messages_per_active_day) }}</div>
+        <div class="stat-label">Per Active Day</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="chart-grid">
+    <div class="card">
+        <h3 class="card-title">Monthly Volume</h3>
+        <div class="chart-container">
+            <canvas id="monthlyChart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <h3 class="card-title">Day of Week</h3>
+        <div class="chart-container">
+            <canvas id="dowChart"></canvas>
+        </div>
+    </div>
+    <div class="card">
+        <h3 class="card-title">Message Split</h3>
+        <div class="chart-container">
+            <canvas id="splitChart"></canvas>
+        </div>
+    </div>
+    {% if response_times.monthly_trend %}
+    <div class="card">
+        <h3 class="card-title">Response Time Trend</h3>
+        <div class="chart-container">
+            <canvas id="rtTrendChart"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const accentLight = '#a29bfe';
+    const accent = '#6c5ce7';
+    const success = '#00b894';
+    const textMuted = '#8b8b9e';
+
+    // Monthly Volume
+    const monthlyVolumes = {{ volume.monthly_volumes | tojson }};
+    const monthLabels = Object.keys(monthlyVolumes).sort();
+    const monthValues = monthLabels.map(function(k) { return monthlyVolumes[k]; });
+
+    new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: {
+            labels: monthLabels,
+            datasets: [{
+                label: 'Messages',
+                data: monthValues,
+                backgroundColor: accentLight,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted, maxRotation: 45 }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+
+    // Day of Week
+    const heatmapData = {{ heatmap | tojson }};
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayTotals = dayLabels.map(function(_, i) {
+        let total = 0;
+        const dayData = heatmapData.data[String(i)] || {};
+        for (const h in dayData) { total += dayData[h]; }
+        return total;
+    });
+
+    new Chart(document.getElementById('dowChart'), {
+        type: 'bar',
+        data: {
+            labels: dayLabels,
+            datasets: [{
+                label: 'Messages',
+                data: dayTotals,
+                backgroundColor: accent,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+
+    // Message Split Doughnut
+    new Chart(document.getElementById('splitChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['{{ your_name }}', '{{ their_name }}'],
+            datasets: [{
+                data: [{{ volume.you_count }}, {{ volume.them_count }}],
+                backgroundColor: [accent, success],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: textMuted, padding: 16 }
+                }
+            }
+        }
+    });
+
+    // Response Time Trend (if data exists)
+    {% if response_times.monthly_trend %}
+    const rtTrend = {{ response_times.monthly_trend | tojson }};
+    const rtLabels = Object.keys(rtTrend).sort();
+    const rtValues = rtLabels.map(function(k) { return rtTrend[k]; });
+
+    new Chart(document.getElementById('rtTrendChart'), {
+        type: 'line',
+        data: {
+            labels: rtLabels,
+            datasets: [{
+                label: 'Median Response (s)',
+                data: rtValues,
+                borderColor: accentLight,
+                backgroundColor: 'rgba(162, 155, 254, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 3,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted, maxRotation: 45 }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+    {% endif %}
+})();
+</script>
+{% endblock %}
