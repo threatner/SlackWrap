@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Deep Dives{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Deep Dives</h1>
+    <p>Detailed analytics for {{ your_name }} &amp; {{ their_name }}</p>
+</div>
+
+<div class="dd-grid">
+    <a href="/deep-dives/response-time" class="dd-link">
+        <div class="card">
+            <h3 class="card-title">Response Time</h3>
+            <p>Analyze how quickly you reply to each other, by hour of day and over time.</p>
+        </div>
+    </a>
+    <a href="/deep-dives/communication" class="dd-link">
+        <div class="card">
+            <h3 class="card-title">Communication</h3>
+            <p>Word counts, emoji usage, reactions, and message length distribution.</p>
+        </div>
+    </a>
+    <a href="/deep-dives/activity" class="dd-link">
+        <div class="card">
+            <h3 class="card-title">Activity</h3>
+            <p>Day of week patterns, weekend vs weekday, and monthly rankings.</p>
+        </div>
+    </a>
+</div>
+{% endblock %}

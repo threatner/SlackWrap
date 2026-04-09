@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Activity{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Activity</h1>
+    <p>When {{ your_name }} &amp; {{ their_name }} are most active</p>
+</div>
+
+<!-- Summary -->
+<div class="hero-grid">
+    <div class="card hero-card">
+        <div class="stat-value">{{ volume.active_days }}</div>
+        <div class="stat-label">Active Days</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ volume.weekday_count }}</div>
+        <div class="stat-label">Weekday Messages</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ volume.weekend_count }}</div>
+        <div class="stat-label">Weekend Messages</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ "%.1f"|format(volume.messages_per_active_day) }}</div>
+        <div class="stat-label">Per Active Day</div>
+    </div>
+</div>
+
+<!-- Day of Week Chart -->
+<div class="card" style="margin-bottom: 24px;">
+    <h3 class="card-title">Messages by Day of Week</h3>
+    <div class="chart-container">
+        <canvas id="dowChart"></canvas>
+    </div>
+</div>
+
+<!-- Weekend vs Weekday -->
+<div class="card" style="margin-bottom: 24px;">
+    <h3 class="card-title">Weekend vs Weekday</h3>
+    <div class="stat-row">
+        <span class="label">Weekday Messages</span>
+        <span class="value">{{ volume.weekday_count }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">Weekend Messages</span>
+        <span class="value">{{ volume.weekend_count }}</span>
+    </div>
+    {% if volume.weekday_count > 0 %}
+    <div class="stat-row">
+        <span class="label">Weekend Ratio</span>
+        <span class="value">{{ "%.1f"|format(volume.weekend_count / (volume.weekday_count + volume.weekend_count) * 100) }}%</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Monthly Rank -->
+{% if volume.monthly_rank %}
+<div class="card">
+    <h3 class="card-title">Monthly Rank</h3>
+    {% for month, count, rank in volume.monthly_rank[:12] %}
+    <div class="stat-row">
+        <span class="label">#{{ rank }} — {{ month }}</span>
+        <span class="value">{{ count }} messages</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<script>
+(function() {
+    const accent = '#6c5ce7';
+    const textMuted = '#8b8b9e';
+
+    const heatmapData = {{ heatmap | tojson }};
+    const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayTotals = dayLabels.map(function(_, i) {
+        let total = 0;
+        const dayData = heatmapData.data[String(i)] || {};
+        for (const h in dayData) { total += dayData[h]; }
+        return total;
+    });
+
+    new Chart(document.getElementById('dowChart'), {
+        type: 'bar',
+        data: {
+            labels: dayLabels,
+            datasets: [{
+                label: 'Messages',
+                data: dayTotals,
+                backgroundColor: accent,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}

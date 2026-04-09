@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Communication{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Communication</h1>
+    <p>Words, emoji, reactions for {{ your_name }} &amp; {{ their_name }}</p>
+</div>
+
+<!-- Word Counts -->
+<div class="hero-grid">
+    <div class="card hero-card">
+        <div class="stat-value">{{ "%.1f"|format(comm.your_avg_words) }}</div>
+        <div class="stat-label">{{ your_name }} Avg Words</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ "%.1f"|format(comm.their_avg_words) }}</div>
+        <div class="stat-label">{{ their_name }} Avg Words</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ comm.your_emoji_total }}</div>
+        <div class="stat-label">{{ your_name }} Emojis</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ comm.their_emoji_total }}</div>
+        <div class="stat-label">{{ their_name }} Emojis</div>
+    </div>
+</div>
+
+<div class="chart-grid">
+    <!-- Top Words -->
+    <div class="card">
+        <h3 class="card-title">Top Words — {{ your_name }}</h3>
+        {% for word, count in comm.your_top_words[:10] %}
+        <div class="stat-row">
+            <span class="label">{{ word }}</span>
+            <span class="value">{{ count }}</span>
+        </div>
+        {% endfor %}
+        {% if not comm.your_top_words %}
+        <p class="text-muted">No data yet</p>
+        {% endif %}
+    </div>
+    <div class="card">
+        <h3 class="card-title">Top Words — {{ their_name }}</h3>
+        {% for word, count in comm.their_top_words[:10] %}
+        <div class="stat-row">
+            <span class="label">{{ word }}</span>
+            <span class="value">{{ count }}</span>
+        </div>
+        {% endfor %}
+        {% if not comm.their_top_words %}
+        <p class="text-muted">No data yet</p>
+        {% endif %}
+    </div>
+
+    <!-- Emoji & Reactions -->
+    <div class="card">
+        <h3 class="card-title">Emoji &amp; Reactions</h3>
+        <div class="stat-row">
+            <span class="label">{{ your_name }} Emoji Diversity</span>
+            <span class="value">{{ comm.emoji_diversity_you }}</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">{{ their_name }} Emoji Diversity</span>
+            <span class="value">{{ comm.emoji_diversity_them }}</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">{{ your_name }} Reactions Given</span>
+            <span class="value">{{ comm.your_reactions_given }}</span>
+        </div>
+        <div class="stat-row">
+            <span class="label">{{ their_name }} Reactions Given</span>
+            <span class="value">{{ comm.their_reactions_given }}</span>
+        </div>
+        {% if comm.top_reactions %}
+        <h3 class="card-title" style="margin-top:16px">Top Reactions</h3>
+        {% for name, count in comm.top_reactions[:5] %}
+        <div class="stat-row">
+            <span class="label">:{{ name }}:</span>
+            <span class="value">{{ count }}</span>
+        </div>
+        {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Message Length Distribution -->
+    <div class="card">
+        <h3 class="card-title">Message Length Distribution</h3>
+        <div class="chart-container">
+            <canvas id="lengthChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Files & Links -->
+<div class="card" style="margin-top: 16px;">
+    <h3 class="card-title">Files &amp; Links</h3>
+    <div class="stat-row">
+        <span class="label">{{ your_name }} Files</span>
+        <span class="value">{{ comm.your_files }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">{{ their_name }} Files</span>
+        <span class="value">{{ comm.their_files }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">{{ your_name }} Links</span>
+        <span class="value">{{ comm.your_links }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">{{ their_name }} Links</span>
+        <span class="value">{{ comm.their_links }}</span>
+    </div>
+</div>
+
+<script>
+(function() {
+    const accent = '#6c5ce7';
+    const accentLight = '#a29bfe';
+    const success = '#00b894';
+    const warning = '#fdcb6e';
+    const textMuted = '#8b8b9e';
+
+    const distData = {{ comm.message_length_distribution | tojson }};
+    const distLabels = Object.keys(distData);
+    const distValues = distLabels.map(function(k) { return distData[k]; });
+    const colors = [accent, accentLight, success, warning, '#e17055', '#74b9ff'];
+
+    if (distLabels.length > 0) {
+        new Chart(document.getElementById('lengthChart'), {
+            type: 'doughnut',
+            data: {
+                labels: distLabels,
+                datasets: [{
+                    data: distValues,
+                    backgroundColor: colors.slice(0, distLabels.length),
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: textMuted, padding: 12 }
+                    }
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

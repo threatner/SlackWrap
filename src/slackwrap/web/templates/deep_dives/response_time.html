@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Response Time{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Response Time</h1>
+    <p>How quickly {{ your_name }} &amp; {{ their_name }} reply</p>
+</div>
+
+<!-- Summary -->
+<div class="hero-grid">
+    <div class="card hero-card">
+        <div class="stat-value">{{ format_duration(response_times.your_median) }}</div>
+        <div class="stat-label">{{ your_name }} Median</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ format_duration(response_times.their_median) }}</div>
+        <div class="stat-label">{{ their_name }} Median</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ response_times.fastest_hour }}:00</div>
+        <div class="stat-label">Fastest Hour</div>
+    </div>
+    <div class="card hero-card">
+        <div class="stat-value">{{ response_times.slowest_hour }}:00</div>
+        <div class="stat-label">Slowest Hour</div>
+    </div>
+</div>
+
+<!-- By Hour Chart -->
+<div class="card" style="margin-bottom: 24px;">
+    <h3 class="card-title">Response Time by Hour of Day</h3>
+    <div class="chart-container">
+        <canvas id="byHourChart"></canvas>
+    </div>
+</div>
+
+<!-- Averages -->
+<div class="card">
+    <h3 class="card-title">Averages</h3>
+    <div class="stat-row">
+        <span class="label">{{ your_name }} Average</span>
+        <span class="value">{{ format_duration(response_times.your_avg) }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">{{ their_name }} Average</span>
+        <span class="value">{{ format_duration(response_times.their_avg) }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">Fastest Hour Median</span>
+        <span class="value">{{ format_duration(response_times.fastest_hour_median) }}</span>
+    </div>
+    <div class="stat-row">
+        <span class="label">Slowest Hour Median</span>
+        <span class="value">{{ format_duration(response_times.slowest_hour_median) }}</span>
+    </div>
+</div>
+
+<script>
+(function() {
+    const accent = '#6c5ce7';
+    const textMuted = '#8b8b9e';
+
+    const byHour = {{ response_times.by_hour | tojson }};
+    const hours = [];
+    const values = [];
+    for (let h = 0; h < 24; h++) {
+        hours.push(h + ':00');
+        values.push(byHour[String(h)] || 0);
+    }
+
+    new Chart(document.getElementById('byHourChart'), {
+        type: 'bar',
+        data: {
+            labels: hours,
+            datasets: [{
+                label: 'Median Response (s)',
+                data: values,
+                backgroundColor: accent,
+                borderRadius: 4,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: textMuted, maxRotation: 45 }, grid: { display: false } },
+                y: { ticks: { color: textMuted }, grid: { color: 'rgba(255,255,255,0.05)' } }
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}
