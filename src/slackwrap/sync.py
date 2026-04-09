@@ -35,7 +35,7 @@ class SyncEngine:
 
     def _extract_start_date(self, profile: dict) -> str | None:
         fields = profile.get("fields") or {}
-        for field_id, field_data in fields.items():
+        for field_data in fields.values():
             label = (field_data.get("label") or "").lower()
             if "start" in label and "date" in label:
                 return field_data.get("value")
