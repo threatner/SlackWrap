@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}SlackWrap — Chat{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+    <div class="page-header">
+        <h1>Chat</h1>
+        <p>AI-powered conversation analysis (coming soon)</p>
+    </div>
+
+    <div class="chat-messages">
+        <div class="chat-bubble them">
+            Hey! I'm the SlackWrap assistant. I can help you explore your conversation
+            data with {{ their_name }} once Ollama integration is ready.
+        </div>
+        <div class="chat-bubble them">
+            This feature is part of Plan 5 — local AI chat powered by Ollama.
+            Stay tuned!
+        </div>
+        <div class="chat-bubble you">
+            Sounds great, can't wait to try it out!
+        </div>
+    </div>
+
+    <div class="chat-input-bar">
+        <input type="text" placeholder="Chat coming in Plan 5 (Ollama)..." disabled>
+        <button disabled>Send</button>
+    </div>
+</div>
+{% endblock %}

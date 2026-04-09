@@ -88,7 +88,7 @@ class DashboardScreen(Screen):
         self.query_one("#dashboard-detail", Static).update("  " + "  |  ".join(detail_parts))
 
     def action_open_web(self) -> None:
-        self.notify("Web view not yet available (Plan 4)")
+        self.app.action_open_web()
 
     def action_open_chat(self) -> None:
         from slackwrap.tui.screens.chat import ChatScreen

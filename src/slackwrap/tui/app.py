@@ -38,7 +38,19 @@ class SlackWrapApp(App):
         self.exit()
 
     def action_open_web(self) -> None:
-        self.notify("Web view not yet available (Plan 4)")
+        if not self.you_db_id or not self.them_db_id:
+            self.notify("No data loaded. Sync first.")
+            return
+        if not hasattr(self, '_web_server') or self._web_server is None:
+            from slackwrap.web.server import WebServer
+            self._web_server = WebServer(
+                db=self.db, you_id=self.you_db_id, them_id=self.them_db_id,
+                your_name="You", their_name=self.selected_user_name or "Them",
+            )
+            self._web_server.start()
+        import webbrowser
+        webbrowser.open(f"{self._web_server.url}/story")
+        self.notify(f"Web view: {self._web_server.url}")
 
     def action_open_chat(self) -> None:
         from slackwrap.tui.screens.chat import ChatScreen
