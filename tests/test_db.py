@@ -40,6 +40,10 @@ def test_database_creates_indexes(db):
     assert "idx_messages_thread" in index_names
     assert "idx_reactions_message" in index_names
     assert "idx_reactions_user" in index_names
+    assert "idx_huddles_channel" in index_names
+    assert "idx_files_user" in index_names
+    assert "idx_weekly_stats_lookup" in index_names
+    assert "idx_monthly_stats_lookup" in index_names
 
 
 def test_insert_and_read_user(db):

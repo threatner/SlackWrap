@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS reactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id INTEGER NOT NULL REFERENCES messages(id),
     user_id INTEGER NOT NULL REFERENCES users(id),
-    emoji_name TEXT NOT NULL
+    emoji_name TEXT NOT NULL,
+    UNIQUE(message_id, user_id, emoji_name)
 );
 
 CREATE TABLE IF NOT EXISTS huddles (
@@ -220,7 +221,6 @@ class Database:
                 locale, avatar_url, time.time(),
             ),
         )
-        self.commit()
         row = self.execute(
             "SELECT id FROM users WHERE slack_id = ?", (slack_id,)
         ).fetchone()
@@ -251,7 +251,6 @@ class Database:
                 num_members, int(is_archived), time.time(),
             ),
         )
-        self.commit()
         row = self.execute(
             "SELECT id FROM channels WHERE slack_id = ?", (slack_id,)
         ).fetchone()
@@ -282,7 +281,6 @@ class Database:
                 thread_ts, reply_count, files_count, created_at,
             ),
         )
-        self.commit()
         row = self.execute(
             "SELECT id FROM messages WHERE channel_id = ? AND slack_ts = ?",
             (channel_id, slack_ts),
