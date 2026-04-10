@@ -75,8 +75,7 @@ def _render_heatmap(data: dict[tuple[int, int], int]) -> str:
             if intensity > 0:
                 alpha = 0.3 + intensity * 0.7
                 fill = f"rgba({r},{g},{b},{alpha:.2f})"
-                glow = f"drop-shadow(0 0 {int(intensity * 6)}px rgba({r},{g},{b},0.5))"
-                svg.append(f'<rect x="{x}" y="{y}" width="{cell_w}" height="{cell_h}" rx="4" fill="{fill}" style="filter:{glow}"><title>{DOW_NAMES[dow]} {hour}:00 — {val} msgs</title></rect>')
+                svg.append(f'<rect x="{x}" y="{y}" width="{cell_w}" height="{cell_h}" rx="4" fill="{fill}"><title>{DOW_NAMES[dow]} {hour}:00 — {val} msgs</title></rect>')
             else:
                 svg.append(f'<rect x="{x}" y="{y}" width="{cell_w}" height="{cell_h}" rx="4" fill="{fill}"><title>{DOW_NAMES[dow]} {hour}:00 — 0 msgs</title></rect>')
     svg.append('</svg>')
@@ -190,18 +189,13 @@ body {{ background:#08081a; color:#e8e8f0; font-family:'DM Sans',sans-serif; lin
 
 /* === COLORS === */
 :root {{
-  --bg:#08081a; --surface:rgba(18,18,42,0.7); --surface-solid:#10102a;
+  --bg:#08081a; --surface:#10102a; --surface-solid:#10102a;
   --border:rgba(80,80,160,0.15); --glass:rgba(255,255,255,0.04);
   --text:#e8e8f0; --dim:#6e6e9a; --accent:#4fc3f7; --accent2:#ce93d8;
   --accent3:#ffb74d; --green:#66bb6a; --red:#ef5350; --pink:#f06292;
 }}
 
-/* === NOISE OVERLAY === */
-body::before {{
-  content:''; position:fixed; inset:0; z-index:9999; pointer-events:none;
-  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-  background-size:128px; opacity:0.4;
-}}
+/* noise overlay removed — SVG fractalNoise on fixed overlay kills scroll perf */
 
 /* === HERO HEADER === */
 .hero-header {{
@@ -229,7 +223,7 @@ body::before {{
 /* === STAT TILES === */
 .tiles {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:16px; padding:0 24px; max-width:1100px; margin:-32px auto 0; position:relative; z-index:2; }}
 .tile {{
-  background:var(--surface); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  background:var(--surface); /* no backdrop-filter — perf */
   border:1px solid var(--border); border-radius:16px; padding:24px 16px; text-align:center;
   transition:transform .25s,border-color .25s;
 }}
@@ -256,7 +250,7 @@ body::before {{
 /* === CARDS === */
 .cards {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; }}
 .card {{
-  background:var(--surface); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  background:var(--surface); /* no backdrop-filter — perf */
   border:1px solid var(--border); border-radius:16px; padding:24px; overflow:hidden;
   position:relative;
 }}
@@ -274,7 +268,7 @@ body::before {{
 .banner {{
   display:flex; gap:24px; justify-content:center; flex-wrap:wrap; padding:20px 28px;
   background:var(--surface); border:1px solid var(--border); border-radius:16px;
-  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  /* no backdrop-filter — perf */
 }}
 .banner__item {{ text-align:center; min-width:100px; }}
 .banner__val {{ font-family:'Sora',sans-serif; font-size:1.3em; font-weight:700; color:var(--accent); }}
