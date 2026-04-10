@@ -16,13 +16,24 @@ pytest tests/ -v
 ## Project Structure
 
 - `src/` — source code
-  - `main.py` — CLI entry point and interactive flow
-  - `slack_client.py` — Slack API wrapper with rate limiting
-  - `message_analytics.py` — message stats computation and formatting
-  - `report.py` — huddle stats, shared utilities (format_duration, median, etc.)
-  - `combined_report.py` — unified huddle + message console report
-  - `html_report.py` — HTML dashboard generator with Chart.js
-  - `cache.py` — persistent JSON message cache
+  - `main.py` — CLI entry point and interactive menu
+  - `slack_client.py` — Slack API wrapper with thread-safe rate limiting
+  - `cache.py` — persistent JSON message cache with versioning
+  - `engine/` — pure computation (no I/O)
+    - `models.py` — data models (User, Conversation, WorkspaceStats, etc.)
+    - `conversation_stats.py` — per-conversation stats computation
+    - `mentions.py` — mention extraction and counting
+    - `workspace_stats.py` — workspace-level aggregation
+  - `orchestrators/` — flow controllers
+    - `person_flow.py` — one-on-one report flow
+    - `workspace_flow.py` — workspace fetch pipeline and wrap orchestrator
+  - `reports/` — output formatters for workspace wrap
+    - `workspace_console.py` — plain-text workspace report
+    - `workspace_html.py` — workspace HTML dashboard
+  - `report.py` — huddle stats and console formatter (one-on-one)
+  - `message_analytics.py` — message stats and console formatter (one-on-one)
+  - `combined_report.py` — unified huddle + message console report (one-on-one)
+  - `html_report.py` — HTML dashboard generator (one-on-one)
 - `tests/` — test suite
 
 ## Guidelines

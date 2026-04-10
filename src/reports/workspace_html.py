@@ -450,7 +450,7 @@ body {{ background:#08081a; color:#e8e8f0; font-family:'DM Sans',sans-serif; lin
 <div class="section">
   <div class="chart-card reveal">
     <h3>Monthly Message Volume</h3>
-    <canvas id="weeklyChart" height="75"></canvas>
+    <div style="height:200px"><canvas id="weeklyChart"></canvas></div>
   </div>
 </div>
 
