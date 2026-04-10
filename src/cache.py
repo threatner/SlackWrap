@@ -60,13 +60,21 @@ class CacheManager:
             }
         return trimmed
 
+    @staticmethod
+    def _min_ts(ts_list: list[str]) -> str:
+        return min(ts_list, key=float)
+
+    @staticmethod
+    def _max_ts(ts_list: list[str]) -> str:
+        return max(ts_list, key=float)
+
     def _migrate_v2_to_v3(self, data: dict, path: str) -> dict:
         """Add v3 fields to a v2 cache and re-persist."""
         messages = data.get("messages", [])
         all_ts = [m["ts"] for m in messages if m.get("ts")]
         data["version"] = 3
-        data["oldest_cached_ts"] = min(all_ts) if all_ts else data.get("last_ts", "0")
-        data["newest_cached_ts"] = max(all_ts) if all_ts else data.get("last_ts", "0")
+        data["oldest_cached_ts"] = self._min_ts(all_ts) if all_ts else data.get("last_ts", "0")
+        data["newest_cached_ts"] = self._max_ts(all_ts) if all_ts else data.get("last_ts", "0")
         data.setdefault("threads", {})
         self._atomic_write_json(path, data)
         return data
@@ -91,8 +99,8 @@ class CacheManager:
     def save(self, channel_id: str, messages: list[dict], last_ts: str):
         os.makedirs(self.cache_dir, exist_ok=True)
         all_ts = [m["ts"] for m in messages if m.get("ts")]
-        oldest = min(all_ts) if all_ts else last_ts
-        newest = max(all_ts) if all_ts else last_ts
+        oldest = self._min_ts(all_ts) if all_ts else last_ts
+        newest = self._max_ts(all_ts) if all_ts else last_ts
         data = {
             "version": CACHE_VERSION,
             "channel_id": channel_id,
@@ -113,8 +121,8 @@ class CacheManager:
         existing["last_ts"] = last_ts
         new_ts = [m["ts"] for m in new_messages if m.get("ts")]
         if new_ts:
-            existing["newest_cached_ts"] = max(existing.get("newest_cached_ts", "0"), max(new_ts))
-            existing["oldest_cached_ts"] = min(existing.get("oldest_cached_ts", new_ts[0]), min(new_ts))
+            existing["newest_cached_ts"] = self._max_ts([existing.get("newest_cached_ts", "0")] + new_ts)
+            existing["oldest_cached_ts"] = self._min_ts([existing.get("oldest_cached_ts", new_ts[0])] + new_ts)
         self._atomic_write_json(self._path(channel_id), existing)
         return existing["messages"]
 

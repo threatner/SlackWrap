@@ -41,6 +41,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="SlackWrap — Your Slack year in review")
     parser.add_argument("--no-cache", action="store_true", help="Skip cache, fetch everything fresh (don't save)")
     parser.add_argument("--clear-cache", action="store_true", help="Clear all cached data before running")
+    parser.add_argument("--fetch-only", action="store_true",
+                        help="Fetch all in-scope conversations to .cache and exit (no analytics)")
+    parser.add_argument("--from", dest="from_date", metavar="YYYY-MM-DD",
+                        help="Window start date (inclusive)")
+    parser.add_argument("--to", dest="to_date", metavar="YYYY-MM-DD",
+                        help="Window end date (inclusive)")
+    parser.add_argument("--year", type=int, help="Shorthand for --from YYYY-01-01 --to YYYY-12-31")
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Concurrent fetch workers (default 4, max 8)")
+    parser.add_argument("--timezone", default=None,
+                        help="IANA timezone for day-of-week/hour stats (default: system local)")
     return parser.parse_args(argv)
 
 
@@ -160,6 +171,34 @@ def main(argv: list[str] | None = None):
     if args.clear_cache:
         cache.clear_all()
         print("  Cache cleared.")
+
+    if args.fetch_only:
+        from src.orchestrators.workspace_flow import run_workspace_fetch, parse_window
+        try:
+            window_start_ts, window_end_ts = parse_window(
+                year=args.year,
+                from_str=args.from_date,
+                to_str=args.to_date,
+            )
+        except ValueError as e:
+            print(f"\n  Bad window: {e}")
+            sys.exit(1)
+        result = run_workspace_fetch(
+            client, cache,
+            window_start_ts=window_start_ts,
+            window_end_ts=window_end_ts,
+            workers=args.workers,
+            show_progress=True,
+        )
+        print()
+        print(f"  Fetched: {result['fetched_count']} conversations")
+        print(f"  Failed:  {result['failed_count']}")
+        if result['failures']:
+            for f in result['failures']:
+                print(f"    - {f['name']} ({f['channel_id']}): {f['error']}")
+        print(f"  Cache:   .cache/")
+        print(f"  Manifest: .cache/_workspace_manifest.json")
+        sys.exit(0)
 
     query = input("\nSearch for a person or channel: ").strip()
     if not query:
