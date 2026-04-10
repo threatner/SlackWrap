@@ -423,6 +423,9 @@ def _clamp_workers(n: int) -> int:
     return max(1, min(n, 8))
 
 
+_SPINNER_FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
 def _build_live_table(
     phase: str,
     total: int,
@@ -431,30 +434,48 @@ def _build_live_table(
     active_channels: dict[str, str],
     total_msgs: int,
     throttle_status: dict[str, str] | None = None,
+    elapsed_secs: float = 0.0,
 ) -> Table:
     """Build a rich Table that updates in-place — no scrolling."""
     table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
     table.add_column(ratio=1)
     table.add_column(ratio=1, justify="right")
 
+    # Elapsed time, human-readable
+    em, es = divmod(int(elapsed_secs), 60)
+    elapsed_str = f"{em}m {es:02d}s" if em else f"{es}s"
+
+    # Spinner shows liveness
+    frame = _SPINNER_FRAMES[int(elapsed_secs * 8) % len(_SPINNER_FRAMES)]
+
     table.add_row(
         Text("SlackWrap", style="bold cyan"),
-        Text(phase, style="dim"),
+        Text(f"{elapsed_str}  {phase}", style="dim"),
     )
     table.add_row("", "")
 
     if total > 0:
-        pct = int(completed / total * 100)
-        bar_filled = pct // 2
+        remaining = total - completed
+        # Bar based on exact fraction, not truncated int
+        frac = completed / total
+        bar_filled = round(frac * 50)
         bar_empty = 50 - bar_filled
-        bar = f"[cyan]{'█' * bar_filled}[/][dim]{'░' * bar_empty}[/] {pct}%"
+        bar = f"[cyan]{'█' * bar_filled}[/][dim]{'░' * bar_empty}[/]"
+
+        # Status line: spinner + count + remaining
+        if remaining > 0:
+            status_text = f"  [cyan]{frame}[/] {completed}/{total}  —  {remaining} remaining"
+        else:
+            status_text = f"  [green]✓[/] {completed}/{total}  —  done"
+
+        fail_text = f"  [red]({failed} failed)[/]" if failed else ""
         table.add_row(
-            Text(f"  Conversations: {completed}/{total}  (failed: {failed})", style="white"),
-            Text(f"Messages cached: {total_msgs:,}", style="green"),
+            f"{status_text}{fail_text}",
+            Text(f"{total_msgs:,} messages", style="green"),
         )
         table.add_row(f"  {bar}", "")
     else:
-        table.add_row("  Discovering...", "")
+        table.add_row(f"  [cyan]{frame}[/] Discovering...", "")
 
     # Rate limit status
     if throttle_status:
@@ -559,6 +580,7 @@ def _run_workspace_fetch_inner(
                 active_channels.pop(ch_name, None)
 
     if show_progress and in_scope:
+        t0 = time.monotonic()
         with Live(
             _build_live_table("Discovering...", 0, 0, 0, {}, 0),
             console=console,
@@ -567,6 +589,7 @@ def _run_workspace_fetch_inner(
             live.update(_build_live_table(
                 f"Fetching ({workers} workers)",
                 len(in_scope), 0, 0, {}, 0, client.throttle_status,
+                elapsed_secs=time.monotonic() - t0,
             ))
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
@@ -585,6 +608,7 @@ def _run_workspace_fetch_inner(
                         f"Fetching ({workers} workers)",
                         len(in_scope), fetched_count + len(failures), len(failures),
                         snapshot, total_msgs_cached, client.throttle_status,
+                        elapsed_secs=time.monotonic() - t0,
                     ))
 
         # Final summary (printed once after live display ends)
