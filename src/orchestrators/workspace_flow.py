@@ -17,6 +17,9 @@ import threading
 import time
 
 from rich.console import Console
+from rich.live import Live
+from rich.table import Table
+from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 from datetime import datetime, timedelta, timezone
 
@@ -420,6 +423,48 @@ def _clamp_workers(n: int) -> int:
     return max(1, min(n, 8))
 
 
+def _build_live_table(
+    phase: str,
+    total: int,
+    completed: int,
+    failed: int,
+    active_channels: dict[str, str],
+    total_msgs: int,
+) -> Table:
+    """Build a rich Table that updates in-place — no scrolling."""
+    table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
+    table.add_column(ratio=1)
+    table.add_column(ratio=1, justify="right")
+
+    table.add_row(
+        Text("SlackWrap", style="bold cyan"),
+        Text(phase, style="dim"),
+    )
+    table.add_row("", "")
+
+    if total > 0:
+        pct = int(completed / total * 100)
+        bar_filled = pct // 2
+        bar_empty = 50 - bar_filled
+        bar = f"[cyan]{'█' * bar_filled}[/][dim]{'░' * bar_empty}[/] {pct}%"
+        table.add_row(
+            Text(f"  Conversations: {completed}/{total}  (failed: {failed})", style="white"),
+            Text(f"Messages cached: {total_msgs:,}", style="green"),
+        )
+        table.add_row(f"  {bar}", "")
+    else:
+        table.add_row("  Discovering...", "")
+
+    table.add_row("", "")
+    if active_channels:
+        for ch_name, status in list(active_channels.items())[:4]:
+            table.add_row(
+                Text(f"  ↳ {ch_name[:35]}", style="dim"),
+                Text(status, style="dim cyan"),
+            )
+    return table
+
+
 def run_workspace_fetch(
     client,
     cache: CacheManager,
@@ -429,29 +474,34 @@ def run_workspace_fetch(
     show_progress: bool = True,
 ) -> dict:
     """
-    Top-level workspace fetch orchestrator.
-
-    Pipeline:
-      1. Discover users + conversations + filter
-      2. Persist manifest
-      3. For each in-scope conversation: fetch messages + walk threads
-      4. Per-conversation error isolation
-
-    Returns dict with fetched_count, failed_count, failures, in_scope, directory.
+    Top-level workspace fetch orchestrator with clean in-place progress UI.
     """
+    from src.slack_client import _display as slack_display
+
     workers = _clamp_workers(workers)
     console = Console(stderr=True)
 
+    # Mute the old per-message status display during workspace fetch
     if show_progress:
-        console.print(f"[bold cyan]SlackWrap[/] — workspace fetch (workers={workers})")
+        slack_display.muted = True
 
+    try:
+        return _run_workspace_fetch_inner(
+            client, cache, window_start_ts, window_end_ts, workers, show_progress, console,
+        )
+    finally:
+        if show_progress:
+            slack_display.muted = False
+
+
+def _run_workspace_fetch_inner(
+    client, cache, window_start_ts, window_end_ts, workers, show_progress, console,
+) -> dict:
     # Phase A: discover
-    if show_progress:
-        console.print("[dim]Discovering users and conversations...[/]")
     directory, in_scope, out_of_scope = discover_workspace(client)
     persist_manifest(cache, me_id=directory.me_id, in_scope=in_scope, out_of_scope=out_of_scope)
 
-    # Persist users list for preview scripts and per-person mode
+    # Persist users list
     users_path = os.path.join(cache.cache_dir, "_users.json")
     with open(users_path, "w") as uf:
         json.dump(
@@ -460,73 +510,88 @@ def run_workspace_fetch(
              for u in directory.users.values()],
             uf,
         )
-    if show_progress:
-        console.print(
-            f"[green]Discovered[/] {len(in_scope)} in-scope "
-            f"({len(out_of_scope)} filtered out)"
-        )
 
-    # Phase B + C: fetch + walk threads (concurrent)
+    # Phase B + C: fetch + walk threads
     failures: list[dict] = []
     fetched_count = 0
+    total_msgs_cached = 0
     failures_lock = threading.Lock()
+    active_channels: dict[str, str] = {}
+    active_lock = threading.Lock()
 
-    def _process_one(entry: dict, progress: Progress | None, task_id) -> tuple[bool, dict | None]:
+    def _process_one(entry: dict) -> tuple[bool, dict | None, int]:
+        ch_name = entry["name"][:35]
+        with active_lock:
+            active_channels[ch_name] = "fetching..."
         try:
-            fetch_conversation_messages(
+            msgs = fetch_conversation_messages(
                 client, cache,
                 channel_id=entry["id"],
                 window_start_ts=window_start_ts,
                 window_end_ts=window_end_ts,
             )
+            msg_count = len(msgs)
+            with active_lock:
+                active_channels[ch_name] = f"{msg_count:,} msgs, walking threads..."
             walk_threads_for_conversation(
                 client, cache,
                 channel_id=entry["id"],
                 me_id=directory.me_id,
             )
-            return True, None
+            return True, None, msg_count
         except Exception as e:
-            return False, {"channel_id": entry["id"], "name": entry["name"], "error": str(e)}
+            return False, {"channel_id": entry["id"], "name": entry["name"], "error": str(e)}, 0
         finally:
-            if progress is not None and task_id is not None:
-                progress.update(task_id, advance=1)
+            with active_lock:
+                active_channels.pop(ch_name, None)
 
     if show_progress and in_scope:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
+        with Live(
+            _build_live_table("Discovering...", 0, 0, 0, {}, 0),
             console=console,
-        ) as progress:
-            task_id = progress.add_task("Fetching conversations", total=len(in_scope))
+            refresh_per_second=4,
+        ) as live:
+            live.update(_build_live_table(
+                f"Fetching ({workers} workers)",
+                len(in_scope), 0, 0, {}, 0,
+            ))
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = {pool.submit(_process_one, entry, progress, task_id): entry for entry in in_scope}
+                futures = {pool.submit(_process_one, entry): entry for entry in in_scope}
                 for fut in concurrent.futures.as_completed(futures):
-                    ok, failure = fut.result()
+                    ok, failure, msg_count = fut.result()
                     if ok:
                         fetched_count += 1
+                        total_msgs_cached += msg_count
                     else:
                         with failures_lock:
                             failures.append(failure)
+                    with active_lock:
+                        snapshot = dict(active_channels)
+                    live.update(_build_live_table(
+                        f"Fetching ({workers} workers)",
+                        len(in_scope), fetched_count + len(failures), len(failures),
+                        snapshot, total_msgs_cached,
+                    ))
+
+        # Final summary (printed once after live display ends)
+        console.print()
+        console.print(f"  [bold cyan]SlackWrap[/] fetch complete")
+        console.print(f"  [green]{fetched_count}[/] conversations  |  [green]{total_msgs_cached:,}[/] messages  |  [red]{len(failures)}[/] failed")
+        if failures:
+            for f in failures:
+                console.print(f"  [red]✗[/] {f['name']}: {f['error']}")
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_process_one, entry, None, None): entry for entry in in_scope}
+            futures = {pool.submit(_process_one, entry): entry for entry in in_scope}
             for fut in concurrent.futures.as_completed(futures):
-                ok, failure = fut.result()
+                ok, failure, msg_count = fut.result()
                 if ok:
                     fetched_count += 1
+                    total_msgs_cached += msg_count
                 else:
                     with failures_lock:
                         failures.append(failure)
-
-    if show_progress:
-        console.print(f"[green]Fetch complete:[/] {fetched_count} succeeded, {len(failures)} failed")
-        if failures:
-            console.print("[red]Failed channels:[/]")
-            for f in failures:
-                console.print(f"  - {f['name']} ({f['channel_id']}): {f['error']}")
 
     return {
         "fetched_count": fetched_count,

@@ -32,8 +32,11 @@ class _StatusDisplay:
         self._active = False
         self._progress = ""
         self._throttle = ""
+        self.muted = False  # Set True during workspace fetch to suppress output
 
     def _render(self):
+        if self.muted:
+            return
         if not self._active:
             sys.stderr.write(f"  {self._progress}\n  {self._throttle}")
             self._active = True
@@ -50,6 +53,8 @@ class _StatusDisplay:
         self._render()
 
     def clear(self):
+        if self.muted:
+            return
         if self._active:
             sys.stderr.write(f"\033[A\r\033[K\r\033[K")
             sys.stderr.flush()
