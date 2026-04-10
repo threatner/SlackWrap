@@ -81,6 +81,7 @@ class SlackClient:
         self._user_cache: dict[str, str] = {}
         self._endpoint_timestamps: dict[str, list[float]] = {}
         self._rate_limit_lock = threading.Lock()
+        self.throttle_status: dict[str, str] = {}  # tier_label -> status string (read by progress UI)
         self.team = None
         self.username = None
         # Auto-detect user_id from token if not provided
@@ -106,22 +107,23 @@ class SlackClient:
         tier = ENDPOINT_TIERS.get(endpoint, 3)
         tier_info = TIER_LIMITS[tier]
         max_req = tier_info["max"]
+        label = tier_info["label"]
 
         while True:
             with self._rate_limit_lock:
                 count = self._get_endpoint_count(endpoint)
                 if count < max_req:
-                    # Record this request inside the lock so the next thread sees it
                     self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())
-                    _display.update_throttle(f"[{tier_info['label']}] {count + 1}/{max_req} req/min")
+                    status = f"{count + 1}/{max_req} req/min"
+                    _display.update_throttle(f"[{label}] {status}")
+                    self.throttle_status[label] = status
                     return
                 timestamps = self._endpoint_timestamps.get(endpoint, [])
                 oldest_ts = timestamps[0] if timestamps else time.time()
                 wait = max(0.0, 60.0 - (time.time() - oldest_ts) + 0.1)
-                _display.update_throttle(
-                    f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s"
-                )
-            # Release lock before sleeping so other threads can proceed
+                throttle_msg = f"⏳ {count}/{max_req} — waiting {wait:.0f}s"
+                _display.update_throttle(f"[throttle] {throttle_msg}")
+                self.throttle_status[label] = throttle_msg
             time.sleep(wait)
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:

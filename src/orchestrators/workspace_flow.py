@@ -430,6 +430,7 @@ def _build_live_table(
     failed: int,
     active_channels: dict[str, str],
     total_msgs: int,
+    throttle_status: dict[str, str] | None = None,
 ) -> Table:
     """Build a rich Table that updates in-place — no scrolling."""
     table = Table(show_header=False, show_edge=False, pad_edge=False, box=None)
@@ -454,6 +455,18 @@ def _build_live_table(
         table.add_row(f"  {bar}", "")
     else:
         table.add_row("  Discovering...", "")
+
+    # Rate limit status
+    if throttle_status:
+        parts = []
+        for tier, status in sorted(throttle_status.items()):
+            if "waiting" in status or "⏳" in status:
+                parts.append(f"[yellow]{tier}: {status}[/]")
+            else:
+                parts.append(f"[dim]{tier}: {status}[/]")
+        if parts:
+            table.add_row("", "")
+            table.add_row(f"  Rate limits: {' │ '.join(parts)}", "")
 
     table.add_row("", "")
     if active_channels:
@@ -553,7 +566,7 @@ def _run_workspace_fetch_inner(
         ) as live:
             live.update(_build_live_table(
                 f"Fetching ({workers} workers)",
-                len(in_scope), 0, 0, {}, 0,
+                len(in_scope), 0, 0, {}, 0, client.throttle_status,
             ))
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
@@ -571,7 +584,7 @@ def _run_workspace_fetch_inner(
                     live.update(_build_live_table(
                         f"Fetching ({workers} workers)",
                         len(in_scope), fetched_count + len(failures), len(failures),
-                        snapshot, total_msgs_cached,
+                        snapshot, total_msgs_cached, client.throttle_status,
                     ))
 
         # Final summary (printed once after live display ends)
