@@ -222,16 +222,18 @@ class SlackClient:
                 break
         return replies
 
-    def fetch_messages(self, channel_id: str, oldest: str | None = None, include_threads: bool = False) -> list[dict]:
+    def fetch_messages(self, channel_id: str, oldest: str | None = None, latest: str | None = None, include_threads: bool = False) -> list[dict]:
         messages = []
         cursor = ""
         page = 0
         while True:
             page += 1
             _print_status(f"Fetching messages... (page {page}, {len(messages):,} fetched)")
-            params = {"channel": channel_id, "limit": 999}
+            params = {"channel": channel_id, "limit": 200}
             if oldest:
                 params["oldest"] = oldest
+            if latest:
+                params["latest"] = latest
             if cursor:
                 params["cursor"] = cursor
             data = self._get("conversations.history", params)
@@ -312,6 +314,55 @@ class SlackClient:
             or user_data.get("name")
             or user_data.get("id", "Unknown")
         )
+
+    def auth_test(self) -> dict:
+        """Return raw auth.test response."""
+        return self._get("auth.test", {})
+
+    def list_users(self) -> list[dict]:
+        """Paginate users.list and return all user records (no filtering)."""
+        users = []
+        cursor = ""
+        page = 0
+        while True:
+            page += 1
+            _print_status(f"Loading users... (page {page}, {len(users)} loaded)")
+            params = {"limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("users.list", params)
+            users.extend(data.get("members", []))
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        _clear_status()
+        return users
+
+    def list_conversations(self, types: str, exclude_archived: bool) -> list[dict]:
+        """
+        Paginate conversations.list with specified types and archive filter.
+        Returns all conversations matching the criteria.
+        """
+        conversations = []
+        cursor = ""
+        page = 0
+        while True:
+            page += 1
+            _print_status(f"Loading conversations... (page {page}, {len(conversations)} loaded)")
+            params = {
+                "types": types,
+                "limit": 1000,
+                "exclude_archived": "true" if exclude_archived else "false",
+            }
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.list", params)
+            conversations.extend(data.get("channels", []))
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        _clear_status()
+        return conversations
 
     def resolve_user_name(self, user_id: str) -> str:
         if user_id in self._user_cache:
