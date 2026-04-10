@@ -649,19 +649,42 @@ def run_workspace_wrap(client, cache: CacheManager, args) -> None:
         except Exception:
             print(f"  Warning: unknown timezone '{args.timezone}', using system local")
 
-    # Phase 1: fetch
-    result = run_workspace_fetch(
-        client, cache,
-        window_start_ts=window_start_ts, window_end_ts=window_end_ts,
-        workers=args.workers, show_progress=True,
+    # Phase 1: fetch — skip if cache is warm (same window, manifest exists)
+    manifest = cache.load_manifest()
+    users_path = os.path.join(cache.cache_dir, "_users.json")
+    cache_warm = (
+        manifest is not None
+        and os.path.exists(users_path)
+        and not getattr(args, 'no_cache', False)
     )
 
-    directory = result["directory"]
-    in_scope = result["in_scope"]
-    failures = result["failures"]
+    if cache_warm:
+        # Rebuild directory from cached users
+        import json as _json
+        raw_users = _json.load(open(users_path))
+        from src.engine.models import User
+        directory = UserDirectory(
+            users={u["id"]: User(id=u["id"], name=u["name"], is_bot=u.get("is_bot", False), is_deleted=u.get("deleted", False))
+                   for u in raw_users},
+            me_id=manifest["me_id"],
+        )
+        in_scope = [c for c in manifest["conversations"] if c.get("in_scope")]
+        failures = []
+        console = Console(stderr=True)
+        console.print(f"[green]Cache hit[/] — {len(in_scope)} conversations from prior fetch")
+    else:
+        result = run_workspace_fetch(
+            client, cache,
+            window_start_ts=window_start_ts, window_end_ts=window_end_ts,
+            workers=args.workers, show_progress=True,
+        )
+        directory = result["directory"]
+        in_scope = result["in_scope"]
+        failures = result["failures"]
 
     # Phase 2: compute per-conversation stats
-    console = Console(stderr=True)
+    if not cache_warm:
+        console = Console(stderr=True)
     console.print("[dim]Computing stats...[/]")
 
     conversation_stats = []
