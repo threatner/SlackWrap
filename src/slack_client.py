@@ -1,5 +1,6 @@
 import sys
 import time
+import threading
 import requests
 
 API_BASE = "https://slack.com/api"
@@ -31,8 +32,11 @@ class _StatusDisplay:
         self._active = False
         self._progress = ""
         self._throttle = ""
+        self.muted = False  # Set True during workspace fetch to suppress output
 
     def _render(self):
+        if self.muted:
+            return
         if not self._active:
             sys.stderr.write(f"  {self._progress}\n  {self._throttle}")
             self._active = True
@@ -49,6 +53,8 @@ class _StatusDisplay:
         self._render()
 
     def clear(self):
+        if self.muted:
+            return
         if self._active:
             sys.stderr.write(f"\033[A\r\033[K\r\033[K")
             sys.stderr.flush()
@@ -74,6 +80,8 @@ class SlackClient:
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
         self._endpoint_timestamps: dict[str, list[float]] = {}
+        self._rate_limit_lock = threading.Lock()
+        self.throttle_status: dict[str, str] = {}  # tier_label -> status string (read by progress UI)
         self.team = None
         self.username = None
         # Auto-detect user_id from token if not provided
@@ -99,23 +107,24 @@ class SlackClient:
         tier = ENDPOINT_TIERS.get(endpoint, 3)
         tier_info = TIER_LIMITS[tier]
         max_req = tier_info["max"]
+        label = tier_info["label"]
 
-        count = self._get_endpoint_count(endpoint)
-
-        if count >= max_req:
-            timestamps = self._endpoint_timestamps.get(endpoint, [])
-            if timestamps:
-                oldest_ts = timestamps[0]
-                wait = 60.0 - (time.time() - oldest_ts) + 0.1
-                if wait > 0:
-                    _display.update_throttle(
-                        f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s for window to free up"
-                    )
-                    time.sleep(wait)
-            # Always clean up after potential wait
-            self._get_endpoint_count(endpoint)
-        else:
-            _display.update_throttle(f"[{tier_info['label']}] {count}/{max_req} req/min")
+        while True:
+            with self._rate_limit_lock:
+                count = self._get_endpoint_count(endpoint)
+                if count < max_req:
+                    self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())
+                    status = f"{count + 1}/{max_req} req/min"
+                    _display.update_throttle(f"[{label}] {status}")
+                    self.throttle_status[label] = status
+                    return
+                timestamps = self._endpoint_timestamps.get(endpoint, [])
+                oldest_ts = timestamps[0] if timestamps else time.time()
+                wait = max(0.0, 60.0 - (time.time() - oldest_ts) + 0.1)
+                throttle_msg = f"⏳ {count}/{max_req} — waiting {wait:.0f}s"
+                _display.update_throttle(f"[throttle] {throttle_msg}")
+                self.throttle_status[label] = throttle_msg
+            time.sleep(wait)
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
         self._throttle_if_needed(endpoint)
@@ -129,9 +138,6 @@ class SlackClient:
             self._get_endpoint_count(endpoint)
             self._throttle_if_needed(endpoint)
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {}, timeout=30)
-
-        # Record this request
-        self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())
 
         resp.raise_for_status()
         data = resp.json()
@@ -223,16 +229,18 @@ class SlackClient:
                 break
         return replies
 
-    def fetch_messages(self, channel_id: str, oldest: str | None = None, include_threads: bool = False) -> list[dict]:
+    def fetch_messages(self, channel_id: str, oldest: str | None = None, latest: str | None = None, include_threads: bool = False) -> list[dict]:
         messages = []
         cursor = ""
         page = 0
         while True:
             page += 1
             _print_status(f"Fetching messages... (page {page}, {len(messages):,} fetched)")
-            params = {"channel": channel_id, "limit": 999}
+            params = {"channel": channel_id, "limit": 200}
             if oldest:
                 params["oldest"] = oldest
+            if latest:
+                params["latest"] = latest
             if cursor:
                 params["cursor"] = cursor
             data = self._get("conversations.history", params)
@@ -313,6 +321,55 @@ class SlackClient:
             or user_data.get("name")
             or user_data.get("id", "Unknown")
         )
+
+    def auth_test(self) -> dict:
+        """Return raw auth.test response."""
+        return self._get("auth.test", {})
+
+    def list_users(self) -> list[dict]:
+        """Paginate users.list and return all user records (no filtering)."""
+        users = []
+        cursor = ""
+        page = 0
+        while True:
+            page += 1
+            _print_status(f"Loading users... (page {page}, {len(users)} loaded)")
+            params = {"limit": 200}
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("users.list", params)
+            users.extend(data.get("members", []))
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        _clear_status()
+        return users
+
+    def list_conversations(self, types: str, exclude_archived: bool) -> list[dict]:
+        """
+        Paginate conversations.list with specified types and archive filter.
+        Returns all conversations matching the criteria.
+        """
+        conversations = []
+        cursor = ""
+        page = 0
+        while True:
+            page += 1
+            _print_status(f"Loading conversations... (page {page}, {len(conversations)} loaded)")
+            params = {
+                "types": types,
+                "limit": 1000,
+                "exclude_archived": "true" if exclude_archived else "false",
+            }
+            if cursor:
+                params["cursor"] = cursor
+            data = self._get("conversations.list", params)
+            conversations.extend(data.get("channels", []))
+            cursor = data.get("response_metadata", {}).get("next_cursor", "")
+            if not cursor:
+                break
+        _clear_status()
+        return conversations
 
     def resolve_user_name(self, user_id: str) -> str:
         if user_id in self._user_cache:

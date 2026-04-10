@@ -1,5 +1,7 @@
+import threading
+import time as _time
 from unittest.mock import patch, MagicMock
-from src.slack_client import SlackClient
+from src.slack_client import SlackClient, TIER_LIMITS
 
 
 def _mock_response(json_data, status_code=200):
@@ -328,3 +330,125 @@ class TestResolveUserName:
         with patch("src.slack_client.requests.get", return_value=_mock_response(user_response)):
             name = client.resolve_user_name("U_ME")
         assert name == "Rahul"
+
+
+class TestAuthTest:
+    def test_returns_team_info(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        with patch("src.slack_client.requests.get", return_value=_mock_response({
+            "ok": True, "user_id": "U_ME", "user": "rahul", "team": "acme", "team_id": "T123",
+        })):
+            info = client.auth_test()
+        assert info["user_id"] == "U_ME"
+        assert info["team"] == "acme"
+
+
+class TestListUsers:
+    def test_returns_full_user_records_unfiltered(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        page1 = {
+            "ok": True,
+            "members": [
+                {"id": "U001", "name": "alice", "is_bot": False, "deleted": False, "profile": {}},
+                {"id": "U002", "name": "bob", "is_bot": True, "deleted": False, "profile": {}},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+        with patch("src.slack_client.requests.get", return_value=_mock_response(page1)):
+            users = client.list_users()
+        assert len(users) == 2
+        assert users[1]["is_bot"] is True
+
+    def test_paginates(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        page1 = {
+            "ok": True,
+            "members": [{"id": "U001", "name": "a", "is_bot": False, "deleted": False, "profile": {}}],
+            "response_metadata": {"next_cursor": "cursor_xyz"},
+        }
+        page2 = {
+            "ok": True,
+            "members": [{"id": "U002", "name": "b", "is_bot": False, "deleted": False, "profile": {}}],
+            "response_metadata": {"next_cursor": ""},
+        }
+        with patch("src.slack_client.requests.get", side_effect=[_mock_response(page1), _mock_response(page2)]):
+            users = client.list_users()
+        assert len(users) == 2
+        assert {u["id"] for u in users} == {"U001", "U002"}
+
+
+class TestListConversations:
+    def test_passes_types_and_exclude_archived(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        response = {
+            "ok": True,
+            "channels": [
+                {"id": "C001", "name": "engineering", "is_member": True},
+                {"id": "C002", "name": "random", "is_member": False},
+            ],
+            "response_metadata": {"next_cursor": ""},
+        }
+        mock_get = MagicMock(return_value=_mock_response(response))
+        with patch("src.slack_client.requests.get", mock_get):
+            convs = client.list_conversations(
+                types="public_channel,private_channel,mpim,im",
+                exclude_archived=False,
+            )
+        params = mock_get.call_args[1]["params"]
+        assert params["types"] == "public_channel,private_channel,mpim,im"
+        assert params["exclude_archived"] == "false"
+        assert len(convs) == 2
+
+    def test_paginates(self):
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        page1 = {
+            "ok": True,
+            "channels": [{"id": "C001", "name": "a"}],
+            "response_metadata": {"next_cursor": "next"},
+        }
+        page2 = {
+            "ok": True,
+            "channels": [{"id": "C002", "name": "b"}],
+            "response_metadata": {"next_cursor": ""},
+        }
+        with patch("src.slack_client.requests.get", side_effect=[_mock_response(page1), _mock_response(page2)]):
+            convs = client.list_conversations(types="public_channel", exclude_archived=True)
+        assert len(convs) == 2
+
+
+class TestConcurrentRateLimit:
+    def test_concurrent_calls_respect_tier_ceiling(self):
+        """8 threads issuing tier-2 requests must never exceed the ceiling within 60s."""
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        responses = []
+
+        def fake_get(*args, **kwargs):
+            responses.append(_time.time())
+            return _mock_response({"ok": True})
+
+        with patch("src.slack_client.requests.get", side_effect=fake_get):
+            threads = []
+            errors = []
+
+            def worker():
+                try:
+                    for _ in range(5):
+                        client._get("users.list", {"limit": 1})
+                except Exception as e:
+                    errors.append(e)
+
+            for _ in range(8):
+                t = threading.Thread(target=worker)
+                threads.append(t)
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=120)
+
+        assert errors == []
+        responses.sort()
+        max_in_window = 0
+        for i, ts in enumerate(responses):
+            count = sum(1 for t in responses[i:] if t - ts < 60.0)
+            max_in_window = max(max_in_window, count)
+        assert max_in_window <= TIER_LIMITS[2]["max"], f"Exceeded tier 2 ceiling: {max_in_window}"

@@ -1,4 +1,5 @@
-from src.main import build_search_results, parse_args
+from src.main import parse_args
+from src.orchestrators.person_flow import build_search_results
 
 
 class TestBuildSearchResults:
