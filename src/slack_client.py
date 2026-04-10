@@ -1,5 +1,6 @@
 import sys
 import time
+import threading
 import requests
 
 API_BASE = "https://slack.com/api"
@@ -74,6 +75,7 @@ class SlackClient:
         self.headers = {"Authorization": f"Bearer {token}"}
         self._user_cache: dict[str, str] = {}
         self._endpoint_timestamps: dict[str, list[float]] = {}
+        self._rate_limit_lock = threading.Lock()
         self.team = None
         self.username = None
         # Auto-detect user_id from token if not provided
@@ -100,22 +102,22 @@ class SlackClient:
         tier_info = TIER_LIMITS[tier]
         max_req = tier_info["max"]
 
-        count = self._get_endpoint_count(endpoint)
-
-        if count >= max_req:
-            timestamps = self._endpoint_timestamps.get(endpoint, [])
-            if timestamps:
-                oldest_ts = timestamps[0]
-                wait = 60.0 - (time.time() - oldest_ts) + 0.1
-                if wait > 0:
-                    _display.update_throttle(
-                        f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s for window to free up"
-                    )
-                    time.sleep(wait)
-            # Always clean up after potential wait
-            self._get_endpoint_count(endpoint)
-        else:
-            _display.update_throttle(f"[{tier_info['label']}] {count}/{max_req} req/min")
+        while True:
+            with self._rate_limit_lock:
+                count = self._get_endpoint_count(endpoint)
+                if count < max_req:
+                    # Record this request inside the lock so the next thread sees it
+                    self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())
+                    _display.update_throttle(f"[{tier_info['label']}] {count + 1}/{max_req} req/min")
+                    return
+                timestamps = self._endpoint_timestamps.get(endpoint, [])
+                oldest_ts = timestamps[0] if timestamps else time.time()
+                wait = max(0.0, 60.0 - (time.time() - oldest_ts) + 0.1)
+                _display.update_throttle(
+                    f"[throttle] {count}/{max_req} {tier_info['label']} — waiting {wait:.0f}s"
+                )
+            # Release lock before sleeping so other threads can proceed
+            time.sleep(wait)
 
     def _get(self, endpoint: str, params: dict | None = None) -> dict:
         self._throttle_if_needed(endpoint)
@@ -129,9 +131,6 @@ class SlackClient:
             self._get_endpoint_count(endpoint)
             self._throttle_if_needed(endpoint)
             resp = requests.get(f"{API_BASE}/{endpoint}", headers=self.headers, params=params or {}, timeout=30)
-
-        # Record this request
-        self._endpoint_timestamps.setdefault(endpoint, []).append(time.time())
 
         resp.raise_for_status()
         data = resp.json()

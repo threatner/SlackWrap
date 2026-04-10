@@ -1,5 +1,7 @@
+import threading
+import time as _time
 from unittest.mock import patch, MagicMock
-from src.slack_client import SlackClient
+from src.slack_client import SlackClient, TIER_LIMITS
 
 
 def _mock_response(json_data, status_code=200):
@@ -328,3 +330,41 @@ class TestResolveUserName:
         with patch("src.slack_client.requests.get", return_value=_mock_response(user_response)):
             name = client.resolve_user_name("U_ME")
         assert name == "Rahul"
+
+
+class TestConcurrentRateLimit:
+    def test_concurrent_calls_respect_tier_ceiling(self):
+        """8 threads issuing tier-2 requests must never exceed the ceiling within 60s."""
+        client = SlackClient(token="xoxp-fake", user_id="U_ME")
+        responses = []
+
+        def fake_get(*args, **kwargs):
+            responses.append(_time.time())
+            return _mock_response({"ok": True})
+
+        with patch("src.slack_client.requests.get", side_effect=fake_get):
+            threads = []
+            errors = []
+
+            def worker():
+                try:
+                    for _ in range(5):
+                        client._get("users.list", {"limit": 1})
+                except Exception as e:
+                    errors.append(e)
+
+            for _ in range(8):
+                t = threading.Thread(target=worker)
+                threads.append(t)
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=120)
+
+        assert errors == []
+        responses.sort()
+        max_in_window = 0
+        for i, ts in enumerate(responses):
+            count = sum(1 for t in responses[i:] if t - ts < 60.0)
+            max_in_window = max(max_in_window, count)
+        assert max_in_window <= TIER_LIMITS[2]["max"], f"Exceeded tier 2 ceiling: {max_in_window}"
