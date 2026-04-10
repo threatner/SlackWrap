@@ -102,13 +102,12 @@ def render_workspace_html(ws: WorkspaceStats) -> str:
     days = (ws.window_end - ws.window_start).days
     me_name = _esc(ws.me.name)
 
-    # Weekly chart data
-    weekly: dict[str, int] = defaultdict(int)
+    # Monthly chart data — clean, fast, no jagged spikes
+    monthly: dict[str, int] = defaultdict(int)
     for d, c in ws.messages.daily_volume_timeline:
-        week_start = d - timedelta(days=d.weekday())
-        weekly[week_start.strftime("%b %d")] += c
-    chart_labels = list(weekly.keys())
-    chart_data = list(weekly.values())
+        monthly[d.strftime("%b %Y")] += c
+    chart_labels = list(monthly.keys())
+    chart_data = list(monthly.values())
 
     heatmap_svg = _render_heatmap(ws.messages.dow_hour_heatmap)
 
@@ -450,7 +449,7 @@ body {{ background:#08081a; color:#e8e8f0; font-family:'DM Sans',sans-serif; lin
 <!-- WEEKLY CHART -->
 <div class="section">
   <div class="chart-card reveal">
-    <h3>Weekly Message Volume</h3>
+    <h3>Monthly Message Volume</h3>
     <canvas id="weeklyChart" height="75"></canvas>
   </div>
 </div>
@@ -512,18 +511,15 @@ if (chartEl) {{
     if (entries[0].isIntersecting && !chartInit) {{
       chartInit = true;
       chartObs.disconnect();
-      const gradient = chartEl.getContext('2d').createLinearGradient(0, 0, 0, 300);
-      gradient.addColorStop(0, 'rgba(79, 195, 247, 0.4)');
-      gradient.addColorStop(1, 'rgba(79, 195, 247, 0.02)');
       new Chart(chartEl, {{
         type: 'bar',
         data: {{
           labels: {json.dumps(chart_labels)},
           datasets: [{{
             data: {json.dumps(chart_data)},
-            backgroundColor: gradient,
+            backgroundColor: 'rgba(79, 195, 247, 0.35)',
             borderColor: 'rgba(79, 195, 247, 0.8)',
-            borderWidth: 1.5, borderRadius: 6, barPercentage: 0.8,
+            borderWidth: 1.5, borderRadius: 8, barPercentage: 0.6,
           }}]
         }},
         options: {{
