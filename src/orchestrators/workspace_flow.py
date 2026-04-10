@@ -284,12 +284,15 @@ def walk_threads_for_conversation(
     cache: CacheManager,
     channel_id: str,
     me_id: str,
+    on_progress=None,
 ) -> None:
     """
     Walk thread replies only for threads the user participated in.
     Builds the "threads to walk" set from cached messages, calls
     conversations.replies only for those, persists participant set +
     latest_reply to the per-channel cache.
+
+    on_progress(walked, total) is called after each thread is walked.
     """
     cached = cache.load(channel_id)
     if cached is None:
@@ -311,6 +314,8 @@ def walk_threads_for_conversation(
 
     cached_threads = cached.get("threads", {})
 
+    # Filter to threads that actually need walking
+    to_fetch = []
     for root_ts, slack_latest_reply in threads_to_walk.items():
         prior = cached_threads.get(root_ts)
         if prior is not None:
@@ -318,7 +323,13 @@ def walk_threads_for_conversation(
                 continue
             if not slack_latest_reply:
                 continue
+        to_fetch.append((root_ts, slack_latest_reply))
 
+    total = len(to_fetch)
+    if on_progress and total:
+        on_progress(0, total)
+
+    for i, (root_ts, _) in enumerate(to_fetch):
         replies = client.fetch_thread_replies(channel_id, root_ts)
         participants = sorted({r["user"] for r in replies if r.get("user")})
         latest_reply = max((r["ts"] for r in replies if r.get("ts")), default=root_ts)
@@ -328,6 +339,8 @@ def walk_threads_for_conversation(
             participants=participants,
             latest_reply=latest_reply,
         )
+        if on_progress:
+            on_progress(i + 1, total)
 
 
 # ---------------------------------------------------------------------------
@@ -455,18 +468,15 @@ def _build_live_table(
     table.add_row("", "")
 
     if total > 0:
-        remaining = total - completed
-        # Bar based on exact fraction, not truncated int
         frac = completed / total
         bar_filled = round(frac * 50)
         bar_empty = 50 - bar_filled
         bar = f"[cyan]{'█' * bar_filled}[/][dim]{'░' * bar_empty}[/]"
 
-        # Status line: spinner + count + remaining
-        if remaining > 0:
-            status_text = f"  [cyan]{frame}[/] {completed}/{total}  —  {remaining} remaining"
+        if completed < total:
+            status_text = f"  [cyan]{frame}[/] {completed}/{total}"
         else:
-            status_text = f"  [green]✓[/] {completed}/{total}  —  done"
+            status_text = f"  [green]✓[/] {completed}/{total}"
 
         fail_text = f"  [red]({failed} failed)[/]" if failed else ""
         table.add_row(
@@ -479,19 +489,15 @@ def _build_live_table(
 
     # Rate limit status
     if throttle_status:
-        parts = []
-        for tier, status in sorted(throttle_status.items()):
-            if "waiting" in status or "⏳" in status:
-                parts.append(f"[yellow]{tier}: {status}[/]")
-            else:
-                parts.append(f"[dim]{tier}: {status}[/]")
-        if parts:
+        waiting = {t: s for t, s in throttle_status.items() if "waiting" in s or "⏳" in s}
+        if waiting:
+            parts = [f"[yellow]{t}: {s}[/]" for t, s in sorted(waiting.items())]
             table.add_row("", "")
-            table.add_row(f"  Rate limits: {' │ '.join(parts)}", "")
+            table.add_row(f"  [yellow]{frame}[/] Rate limited: {' │ '.join(parts)}", "")
 
     table.add_row("", "")
     if active_channels:
-        for ch_name, status in list(active_channels.items())[:4]:
+        for ch_name, status in list(active_channels.items())[:6]:
             table.add_row(
                 Text(f"  ↳ {ch_name[:35]}", style="dim"),
                 Text(status, style="dim cyan"),
@@ -556,7 +562,7 @@ def _run_workspace_fetch_inner(
     def _process_one(entry: dict) -> tuple[bool, dict | None, int]:
         ch_name = entry["name"][:35]
         with active_lock:
-            active_channels[ch_name] = "fetching..."
+            active_channels[ch_name] = "fetching messages..."
         try:
             msgs = fetch_conversation_messages(
                 client, cache,
@@ -565,12 +571,18 @@ def _run_workspace_fetch_inner(
                 window_end_ts=window_end_ts,
             )
             msg_count = len(msgs)
+
+            def _thread_progress(walked, total):
+                with active_lock:
+                    active_channels[ch_name] = f"{msg_count:,} msgs → threads {walked}/{total}"
+
             with active_lock:
-                active_channels[ch_name] = f"{msg_count:,} msgs, walking threads..."
+                active_channels[ch_name] = f"{msg_count:,} msgs → scanning threads..."
             walk_threads_for_conversation(
                 client, cache,
                 channel_id=entry["id"],
                 me_id=directory.me_id,
+                on_progress=_thread_progress,
             )
             return True, None, msg_count
         except Exception as e:
@@ -581,16 +593,27 @@ def _run_workspace_fetch_inner(
 
     if show_progress and in_scope:
         t0 = time.monotonic()
+        stop_refresh = threading.Event()
+
+        def _refresh_loop(live_ref):
+            """Background thread: keeps elapsed time, spinner, and rate-limit status fresh."""
+            while not stop_refresh.wait(0.25):
+                with active_lock:
+                    snapshot = dict(active_channels)
+                live_ref.update(_build_live_table(
+                    f"Fetching ({workers} workers)",
+                    len(in_scope), fetched_count + len(failures), len(failures),
+                    snapshot, total_msgs_cached, client.throttle_status,
+                    elapsed_secs=time.monotonic() - t0,
+                ))
+
         with Live(
             _build_live_table("Discovering...", 0, 0, 0, {}, 0),
             console=console,
             refresh_per_second=4,
         ) as live:
-            live.update(_build_live_table(
-                f"Fetching ({workers} workers)",
-                len(in_scope), 0, 0, {}, 0, client.throttle_status,
-                elapsed_secs=time.monotonic() - t0,
-            ))
+            refresher = threading.Thread(target=_refresh_loop, args=(live,), daemon=True)
+            refresher.start()
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = {pool.submit(_process_one, entry): entry for entry in in_scope}
@@ -602,14 +625,9 @@ def _run_workspace_fetch_inner(
                     else:
                         with failures_lock:
                             failures.append(failure)
-                    with active_lock:
-                        snapshot = dict(active_channels)
-                    live.update(_build_live_table(
-                        f"Fetching ({workers} workers)",
-                        len(in_scope), fetched_count + len(failures), len(failures),
-                        snapshot, total_msgs_cached, client.throttle_status,
-                        elapsed_secs=time.monotonic() - t0,
-                    ))
+
+            stop_refresh.set()
+            refresher.join(timeout=1)
 
         # Final summary (printed once after live display ends)
         console.print()
