@@ -18,6 +18,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--to", dest="to_date", metavar="YYYY-MM-DD",
                         help="Window end date (inclusive)")
     parser.add_argument("--year", type=int, help="Shorthand for --from YYYY-01-01 --to YYYY-12-31")
+    parser.add_argument("--years", type=int, metavar="N",
+                        help="Look back N years from today (e.g. --years 3)")
     parser.add_argument("--workers", type=int, default=4,
                         help="Concurrent fetch workers (default 4, max 8)")
     parser.add_argument("--timezone", default=None,
@@ -70,6 +72,7 @@ def main(argv: list[str] | None = None):
         try:
             window_start_ts, window_end_ts = parse_window(
                 year=args.year, from_str=args.from_date, to_str=args.to_date,
+                years=args.years,
             )
         except ValueError as e:
             print(f"\n  Bad window: {e}")
@@ -90,7 +93,7 @@ def main(argv: list[str] | None = None):
         sys.exit(0)
 
     # Workspace-only flags → go directly to workspace wrap
-    if args.year or args.from_date or args.to_date:
+    if args.year or args.years or args.from_date or args.to_date:
         from src.orchestrators.workspace_flow import run_workspace_wrap, parse_window
         try:
             run_workspace_wrap(client, cache, args)

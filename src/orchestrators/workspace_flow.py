@@ -400,12 +400,18 @@ def parse_window(
     from_str: str | None,
     to_str: str | None,
     now: datetime | None = None,
+    years: int | None = None,
 ) -> tuple[str, str]:
     """Parse CLI window arguments into (window_start_ts, window_end_ts) strings."""
     if now is None:
         now = datetime.now(timezone.utc)
 
-    if year is not None:
+    if years is not None:
+        if years < 1:
+            raise ValueError(f"--years must be at least 1, got {years}")
+        end_dt = now
+        start_dt = now.replace(year=now.year - years)
+    elif year is not None:
         start_dt = datetime(year, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
         end_dt = datetime(year, 12, 31, 23, 59, 59, 999999, tzinfo=timezone.utc)
     elif from_str or to_str:
@@ -676,6 +682,7 @@ def run_workspace_wrap(client, cache: CacheManager, args) -> None:
     try:
         window_start_ts, window_end_ts = parse_window(
             year=args.year, from_str=args.from_date, to_str=args.to_date,
+            years=getattr(args, "years", None),
         )
     except ValueError as e:
         print(f"\n  Bad window: {e}")
