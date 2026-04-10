@@ -613,3 +613,90 @@ def _run_workspace_fetch_inner(
         "in_scope": in_scope,
         "directory": directory,
     }
+
+
+# ---------------------------------------------------------------------------
+# Full workspace wrap: fetch → engine → aggregate → format
+# ---------------------------------------------------------------------------
+
+def run_workspace_wrap(client, cache: CacheManager, args) -> None:
+    """
+    End-to-end workspace wrap: fetch data, compute stats, aggregate, render.
+    Prints console report and writes HTML file.
+    """
+    import sys
+    from zoneinfo import ZoneInfo
+    from src.engine.conversation_stats import compute_conversation_stats
+    from src.engine.workspace_stats import aggregate_workspace_stats
+    from src.reports.workspace_console import format_workspace_console
+    from src.reports.workspace_html import render_workspace_html
+
+    try:
+        window_start_ts, window_end_ts = parse_window(
+            year=args.year, from_str=args.from_date, to_str=args.to_date,
+        )
+    except ValueError as e:
+        print(f"\n  Bad window: {e}")
+        sys.exit(1)
+
+    window_start = datetime.fromtimestamp(float(window_start_ts), tz=timezone.utc)
+    window_end = datetime.fromtimestamp(float(window_end_ts), tz=timezone.utc)
+
+    tz = None
+    if args.timezone:
+        try:
+            tz = ZoneInfo(args.timezone)
+        except Exception:
+            print(f"  Warning: unknown timezone '{args.timezone}', using system local")
+
+    # Phase 1: fetch
+    result = run_workspace_fetch(
+        client, cache,
+        window_start_ts=window_start_ts, window_end_ts=window_end_ts,
+        workers=args.workers, show_progress=True,
+    )
+
+    directory = result["directory"]
+    in_scope = result["in_scope"]
+    failures = result["failures"]
+
+    # Phase 2: compute per-conversation stats
+    console = Console(stderr=True)
+    console.print("[dim]Computing stats...[/]")
+
+    conversation_stats = []
+    for entry in in_scope:
+        cached = cache.load(entry["id"])
+        if not cached:
+            continue
+        cached_threads = cached.get("threads", {})
+        conv = load_conversation_from_cache(cache, entry, member_ids=frozenset())
+        cs = compute_conversation_stats(
+            conv, directory.me_id,
+            window_start=window_start, window_end=window_end,
+            user_directory=directory, tz=tz,
+            cached_threads=cached_threads,
+        )
+        conversation_stats.append(cs)
+
+    # Phase 4: aggregate
+    failed_tuples = [(f["channel_id"], f["error"]) for f in failures]
+    ws = aggregate_workspace_stats(
+        conversation_stats, directory,
+        failed_conversations=failed_tuples,
+    )
+
+    # Phase 5: render
+    print(format_workspace_console(ws))
+
+    html = render_workspace_html(ws)
+    me_slug = ws.me.name.lower().replace(" ", "_")
+    start_str = window_start.strftime("%Y-%m-%d")
+    end_str = window_end.strftime("%Y-%m-%d")
+    filename = f"slackwrap_{me_slug}_{start_str}_to_{end_str}.html"
+    with open(filename, "w") as f:
+        f.write(html)
+
+    abs_path = os.path.abspath(filename)
+    file_url = f"file://{abs_path}"
+    print(f"\n  HTML report: {file_url}")
