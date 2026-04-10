@@ -11,6 +11,8 @@ Phase 1 implements the complete data acquisition pipeline:
   7. load_conversation_from_cache — cache -> Conversation dataclass
 """
 import concurrent.futures
+import json
+import os
 import threading
 import time
 
@@ -448,6 +450,16 @@ def run_workspace_fetch(
         console.print("[dim]Discovering users and conversations...[/]")
     directory, in_scope, out_of_scope = discover_workspace(client)
     persist_manifest(cache, me_id=directory.me_id, in_scope=in_scope, out_of_scope=out_of_scope)
+
+    # Persist users list for preview scripts and per-person mode
+    users_path = os.path.join(cache.cache_dir, "_users.json")
+    with open(users_path, "w") as uf:
+        json.dump(
+            [{"id": u.id, "name": u.name, "is_bot": u.is_bot, "deleted": u.is_deleted,
+              "profile": {"display_name": u.name}}
+             for u in directory.users.values()],
+            uf,
+        )
     if show_progress:
         console.print(
             f"[green]Discovered[/] {len(in_scope)} in-scope "
