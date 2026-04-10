@@ -649,42 +649,22 @@ def run_workspace_wrap(client, cache: CacheManager, args) -> None:
         except Exception:
             print(f"  Warning: unknown timezone '{args.timezone}', using system local")
 
-    # Phase 1: fetch — skip if cache is warm (same window, manifest exists)
-    manifest = cache.load_manifest()
-    users_path = os.path.join(cache.cache_dir, "_users.json")
-    cache_warm = (
-        manifest is not None
-        and os.path.exists(users_path)
-        and not getattr(args, 'no_cache', False)
+    # Phase 1: fetch (always runs — incremental, only pulls new messages)
+    # The fetch itself is cheap when cache is warm (empty delta per channel).
+    # Discovery (users.list + conversations.list) is the only real cost,
+    # and that's 2-3 Tier 2 calls — acceptable for data freshness.
+    result = run_workspace_fetch(
+        client, cache,
+        window_start_ts=window_start_ts, window_end_ts=window_end_ts,
+        workers=args.workers, show_progress=True,
     )
 
-    if cache_warm:
-        # Rebuild directory from cached users
-        import json as _json
-        raw_users = _json.load(open(users_path))
-        from src.engine.models import User
-        directory = UserDirectory(
-            users={u["id"]: User(id=u["id"], name=u["name"], is_bot=u.get("is_bot", False), is_deleted=u.get("deleted", False))
-                   for u in raw_users},
-            me_id=manifest["me_id"],
-        )
-        in_scope = [c for c in manifest["conversations"] if c.get("in_scope")]
-        failures = []
-        console = Console(stderr=True)
-        console.print(f"[green]Cache hit[/] — {len(in_scope)} conversations from prior fetch")
-    else:
-        result = run_workspace_fetch(
-            client, cache,
-            window_start_ts=window_start_ts, window_end_ts=window_end_ts,
-            workers=args.workers, show_progress=True,
-        )
-        directory = result["directory"]
-        in_scope = result["in_scope"]
-        failures = result["failures"]
+    directory = result["directory"]
+    in_scope = result["in_scope"]
+    failures = result["failures"]
 
     # Phase 2: compute per-conversation stats
-    if not cache_warm:
-        console = Console(stderr=True)
+    console = Console(stderr=True)
     console.print("[dim]Computing stats...[/]")
 
     conversation_stats = []
