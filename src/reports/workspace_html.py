@@ -98,9 +98,16 @@ def render_workspace_html(ws: WorkspaceStats) -> str:
     days = (ws.window_end - ws.window_start).days
     me_name = _esc(ws.me.name)
 
-    # Chart data
-    timeline_dates = [d.strftime("%Y-%m-%d") for d, _ in ws.messages.daily_volume_timeline]
-    timeline_counts = [c for _, c in ws.messages.daily_volume_timeline]
+    # Chart data — aggregate to weekly buckets to avoid lag with 100+ daily bars
+    from collections import defaultdict
+    weekly_buckets: dict[str, int] = defaultdict(int)
+    for d, c in ws.messages.daily_volume_timeline:
+        # ISO week start (Monday)
+        week_start = d - __import__("datetime").timedelta(days=d.weekday())
+        label = f"{week_start.strftime('%b %d')}"
+        weekly_buckets[label] += c
+    timeline_dates = list(weekly_buckets.keys())
+    timeline_counts = list(weekly_buckets.values())
 
     # Heatmap SVG
     heatmap_svg = _render_heatmap(ws.messages.dow_hour_heatmap)
@@ -387,7 +394,7 @@ td {{ padding: 8px; border-bottom: 1px solid rgba(37,37,80,0.5); vertical-align:
 <!-- Daily Timeline -->
 <div class="section">
     <div class="chart-wrap">
-        <h3>Daily Message Volume</h3>
+        <h3>Weekly Message Volume</h3>
         <canvas id="timeline" height="70"></canvas>
     </div>
 </div>
@@ -449,14 +456,15 @@ if (ctx) {{
                 backgroundColor: 'rgba(99, 179, 237, 0.5)',
                 borderColor: 'rgba(99, 179, 237, 0.9)',
                 borderWidth: 1,
-                borderRadius: 2,
-                barPercentage: 0.9,
-                categoryPercentage: 1.0,
+                borderRadius: 4,
+                barPercentage: 0.85,
+                categoryPercentage: 0.9,
             }}]
         }},
         options: {{
             responsive: true,
             maintainAspectRatio: false,
+            animation: {{ duration: 0 }},
             plugins: {{ legend: {{ display: false }}, tooltip: {{
                 backgroundColor: '#1a1a3e',
                 titleColor: '#63b3ed',
@@ -464,9 +472,10 @@ if (ctx) {{
                 borderColor: '#252550',
                 borderWidth: 1,
                 cornerRadius: 8,
+                callbacks: {{ label: function(ctx) {{ return ctx.parsed.y + ' messages'; }} }}
             }} }},
             scales: {{
-                x: {{ display: false }},
+                x: {{ ticks: {{ color: '#7a7a9e', font: {{ size: 10 }}, maxRotation: 45 }}, grid: {{ display: false }} }},
                 y: {{ ticks: {{ color: '#7a7a9e', font: {{ size: 11 }} }}, grid: {{ color: 'rgba(37,37,80,0.4)', drawBorder: false }} }}
             }}
         }}
