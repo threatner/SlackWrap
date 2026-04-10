@@ -91,7 +91,7 @@ def _leaderboard(items, columns, formatters):
         cells = [f'<td class="td-rank">{medal}</td>']
         for fmt in formatters:
             cells.append(f'<td>{fmt(item)}</td>')
-        rows.append(f'<tr class="lb-row" style="animation-delay:{i*0.05}s">{"".join(cells)}</tr>')
+        rows.append(f'<tr>{"".join(cells)}</tr>')
     header = "".join(f'<th>{c}</th>' for c in [""] + columns)
     return f'<table class="lb"><thead><tr>{header}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
 
@@ -227,7 +227,7 @@ body {{ background:#08081a; color:#e8e8f0; font-family:'DM Sans',sans-serif; lin
   border:1px solid var(--border); border-radius:16px; padding:24px 16px; text-align:center;
   transition:transform .25s,border-color .25s;
 }}
-.tile:hover {{ transform:translateY(-4px); border-color:rgba(79,195,247,0.3); }}
+/* tile hover removed — layout shift */
 .tile__val {{
   font-family:'Sora',sans-serif; font-weight:800; font-size:2em; line-height:1.1;
   background:linear-gradient(180deg, #fff 0%, var(--accent) 100%);
@@ -277,8 +277,7 @@ body {{ background:#08081a; color:#e8e8f0; font-family:'DM Sans',sans-serif; lin
 /* === LEADERBOARD TABLE === */
 .lb {{ width:100%; border-collapse:collapse; font-size:0.88em; }}
 .lb thead th {{ text-align:left; color:var(--dim); font-size:0.7em; text-transform:uppercase; letter-spacing:0.8px; padding:6px 8px; border-bottom:1px solid var(--border); font-weight:500; }}
-.lb-row {{ opacity:0; animation:fadeSlideIn .4s forwards; }}
-@keyframes fadeSlideIn {{ from {{ opacity:0;transform:translateX(-8px); }} to {{ opacity:1;transform:none; }} }}
+/* row animations removed — stacked delays cause jank with many tables */
 .lb td {{ padding:10px 8px; border-bottom:1px solid rgba(80,80,160,0.08); vertical-align:middle; }}
 .td-rank {{ width:32px; font-size:1.1em; }}
 .rank-num {{ color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:0.85em; }}
@@ -325,7 +324,7 @@ body {{ background:#08081a; color:#e8e8f0; font-family:'DM Sans',sans-serif; lin
   background:rgba(79,195,247,0.08); border:1px solid rgba(79,195,247,0.15);
   color:var(--accent); font-weight:500; transition:transform .2s,background .2s;
 }}
-.word-tag:hover {{ transform:scale(1.08); background:rgba(79,195,247,0.15); }}
+/* hover effect removed — reflow on mouseover */
 .word-tag b {{ color:#fff; margin-left:4px; font-family:'JetBrains Mono',monospace; font-size:0.85em; }}
 
 .emoji-tags {{ display:flex; flex-wrap:wrap; gap:8px; }}
@@ -505,44 +504,48 @@ const obs = new IntersectionObserver((entries) => {{
 }}, {{ threshold:0.1 }});
 document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
-// Weekly chart
-const ctx = document.getElementById('weeklyChart');
-if (ctx) {{
-  const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
-  gradient.addColorStop(0, 'rgba(79, 195, 247, 0.4)');
-  gradient.addColorStop(1, 'rgba(79, 195, 247, 0.02)');
-  new Chart(ctx, {{
-    type: 'bar',
-    data: {{
-      labels: {json.dumps(chart_labels)},
-      datasets: [{{
-        data: {json.dumps(chart_data)},
-        backgroundColor: gradient,
-        borderColor: 'rgba(79, 195, 247, 0.8)',
-        borderWidth: 1.5,
-        borderRadius: 6,
-        barPercentage: 0.8,
-      }}]
-    }},
-    options: {{
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: {{ duration:800, easing:'easeOutQuart' }},
-      plugins: {{
-        legend: {{ display: false }},
-        tooltip: {{
-          backgroundColor:'#10102a', titleColor:'#4fc3f7', bodyColor:'#e8e8f0',
-          borderColor:'rgba(80,80,160,0.3)', borderWidth:1, cornerRadius:10,
-          padding:12, titleFont:{{ family:'Sora',weight:'600' }},
-          callbacks:{{ label: ctx => ctx.parsed.y.toLocaleString() + ' messages' }}
+// Lazy-load chart only when scrolled into view
+const chartEl = document.getElementById('weeklyChart');
+if (chartEl) {{
+  let chartInit = false;
+  const chartObs = new IntersectionObserver((entries) => {{
+    if (entries[0].isIntersecting && !chartInit) {{
+      chartInit = true;
+      chartObs.disconnect();
+      const gradient = chartEl.getContext('2d').createLinearGradient(0, 0, 0, 300);
+      gradient.addColorStop(0, 'rgba(79, 195, 247, 0.4)');
+      gradient.addColorStop(1, 'rgba(79, 195, 247, 0.02)');
+      new Chart(chartEl, {{
+        type: 'bar',
+        data: {{
+          labels: {json.dumps(chart_labels)},
+          datasets: [{{
+            data: {json.dumps(chart_data)},
+            backgroundColor: gradient,
+            borderColor: 'rgba(79, 195, 247, 0.8)',
+            borderWidth: 1.5, borderRadius: 6, barPercentage: 0.8,
+          }}]
+        }},
+        options: {{
+          responsive:true, maintainAspectRatio:false,
+          animation:{{ duration:0 }},
+          plugins: {{
+            legend:{{ display:false }},
+            tooltip: {{
+              backgroundColor:'#10102a', titleColor:'#4fc3f7', bodyColor:'#e8e8f0',
+              borderColor:'rgba(80,80,160,0.3)', borderWidth:1, cornerRadius:10, padding:12,
+              callbacks:{{ label: ctx => ctx.parsed.y.toLocaleString() + ' messages' }}
+            }}
+          }},
+          scales: {{
+            x:{{ ticks:{{ color:'#6e6e9a',font:{{ size:10 }},maxRotation:45 }}, grid:{{ display:false }} }},
+            y:{{ ticks:{{ color:'#6e6e9a',font:{{ size:10 }} }}, grid:{{ color:'rgba(80,80,160,0.1)',drawBorder:false }} }}
+          }}
         }}
-      }},
-      scales: {{
-        x: {{ ticks:{{ color:'#6e6e9a',font:{{ family:'JetBrains Mono',size:10 }},maxRotation:45 }}, grid:{{ display:false }} }},
-        y: {{ ticks:{{ color:'#6e6e9a',font:{{ family:'JetBrains Mono',size:10 }} }}, grid:{{ color:'rgba(80,80,160,0.1)',drawBorder:false }} }}
-      }}
+      }});
     }}
-  }});
+  }}, {{ threshold:0.1 }});
+  chartObs.observe(chartEl);
 }}
 </script>
 </body>
