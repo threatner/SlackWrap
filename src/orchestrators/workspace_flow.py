@@ -88,10 +88,24 @@ def discover_workspace(client) -> tuple[UserDirectory, list[dict], list[dict]]:
     me_id = client.user_id
     directory = _build_user_directory(users, me_id)
 
-    conversations = client.list_conversations(
-        types="public_channel,private_channel,mpim,im",
-        exclude_archived=False,
-    )
+    try:
+        conversations = client.list_conversations(
+            types="public_channel,private_channel,mpim,im",
+            exclude_archived=False,
+        )
+    except RuntimeError as e:
+        if "missing_scope" in str(e):
+            raise RuntimeError(
+                "Slack token is missing required scopes. Please add these User Token Scopes "
+                "to your Slack app and reinstall:\n"
+                "  - channels:read (list public channels)\n"
+                "  - groups:read (list private channels)\n"
+                "  - im:read (list DMs)\n"
+                "  - mpim:read (list group DMs)\n"
+                "  - mpim:history (read group DM messages)\n\n"
+                "Go to https://api.slack.com/apps → your app → OAuth & Permissions"
+            ) from e
+        raise
 
     in_scope: list[dict] = []
     out_of_scope: list[dict] = []
